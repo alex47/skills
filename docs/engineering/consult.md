@@ -26,7 +26,7 @@ The runner accepts a plain-text prompt and returns a plain-text reply, also save
 
 ## A second opinion with continuity
 
-The calling skill decides the consultant's role, when to ask and what context to provide. `consult` handles the common conversation protocol and CLI connection. `implement` and `implement-spec`'s implementer subagents use it for implementation advice. [code-review](https://aihero.dev/skills-code-review) uses fresh consultants for independent assessments within each review axis; other workflows can call it at their own checkpoints.
+The calling skill decides the consultant's role, when to ask and what context to provide. `consult` handles the common conversation protocol and CLI connection. `implement` and `implement-spec`'s implementer subagents use it for implementation advice. [code-review](https://aihero.dev/skills-code-review) uses fresh consultants for independent assessments within each review axis. `diagnosing-bugs` requests independent hypotheses after reproducing and minimising the bug. Other workflows can call it at their own checkpoints.
 
 Follow-ups reuse the same consultant for the same assignment. A different assignment or an independent final review starts fresh. When independent first opinions matter, participants receive the same relevant inputs before seeing each other's conclusions.
 
