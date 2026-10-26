@@ -20,14 +20,18 @@ You invoke this by typing `/implement-spec`, and the agent won't reach for it on
 - **An issue tracker.** The skill reads the tickets from, and resolves them on, the tracker [setup-matt-pocock-skills](https://aihero.dev/skills-setup-matt-pocock-skills) configured. If none has been configured, it stops and tells you to run that first rather than guessing.
 - **Tickets with blocking edges**, as [to-tickets](https://aihero.dev/skills-to-tickets) writes them. Without edges the graph is flat and every ticket starts at once.
 - **A [harness](https://www.aihero.dev/ai-coding-dictionary/harness) that runs subagents in the background and gives each one a git worktree.** The skill exists to run tickets at the same time, so on a harness that runs subagents one at a time, it is only a slower `implement`.
+- **Consultation tooling.** The `consult` skill, Python 3.10 or newer, and an installed, authenticated CLI for the selected consultant provider.
 
 ## The integration branch
 
 Everything lands on one branch. Each implementer:
 
 1. confirms its worktree is based on the integration branch before it starts,
-2. builds its ticket with [tdd](https://aihero.dev/skills-tdd), red-green one slice at a time,
-3. merges the integration branch tip into its own branch before reporting done, so landing it is a fast-forward.
+2. uses `consult` to discuss its implementation approach, with the consultant examining that implementer's worktree,
+3. builds its ticket with [tdd](https://aihero.dev/skills-tdd), red-green one slice at a time,
+4. merges the integration branch tip into its own branch before reporting done, so landing it is a fast-forward.
+
+The final `code-review` uses fresh consultants for independent assessments. The implementer assigned to fix its findings uses `consult` for advice on those fixes.
 
 The tracker decides whether a pull request exists at all. If your tracker closes work through PRs, or you ask for one, the skill opens a draft PR after the first merge and marks it ready at the end. Otherwise the run stops on the integration branch with every ticket resolved the way your tracker closes work, which works fully offline against a local markdown tracker.
 
