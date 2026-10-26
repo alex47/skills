@@ -2,7 +2,9 @@
 
 `consult` gives the agent doing your work a read-only Claude or Codex peer. By default Claude consults Codex and Codex consults Claude; you can choose either provider explicitly, including the one hosting your conversation. The peer can inspect files, challenge an approach, investigate a failure, suggest code and examine results. Your agent keeps responsibility for implementation and decisions.
 
-A consultation can continue in the same [session](https://www.aihero.dev/ai-coding-dictionary/session). It ends when the question is answered, discussion stops adding useful evidence, or the calling workflow reaches its discussion limit. Agreement is optional; supported concerns remain visible even when only one participant raises them.
+Use it for an independent assessment of the same task, or for advice, brainstorming and thinking through a problem. Follow-up discussion is optional in either mode.
+
+A consultation can continue in the same [session](https://www.aihero.dev/ai-coding-dictionary/session), with follow-ups when useful. The agent and consultant may reach different conclusions, which can be an acceptable outcome.
 
 ## When to reach for it
 
@@ -22,7 +24,7 @@ The consultant needs relevant requirements, repository access and evidence. Your
 
 ## A second opinion with continuity
 
-The calling skill decides the consultant's role, when to ask, what evidence to provide and how much discussion to allow. `consult` handles the common conversation protocol and CLI connection. It adds no automatic consultation to existing skills just because they are installed together.
+The calling skill decides the consultant's role, when to ask and what context to provide. `consult` handles the common conversation protocol and CLI connection. It adds no automatic consultation to existing skills just because they are installed together.
 
 Follow-ups reuse the same consultant for the same assignment. A different assignment or an independent final review starts fresh. When independent first opinions matter, participants receive the same relevant inputs before seeing each other's conclusions.
 
@@ -38,11 +40,11 @@ Its project tools enforce read-only access. It can suggest a patch, but your age
 
 **What happens when they disagree?**
 
-Your agent checks the evidence and decides routine technical matters. It reports unresolved concerns with their reasoning, and asks you about consequential tradeoffs. Agreement between two agents is not a correctness check.
+Different conclusions can be an acceptable outcome. You can ask the consultant to explain a finding or discuss another interpretation in the same conversation.
 
 **Why not keep discussing until they agree?**
 
-Agreement is not the goal. Each calling workflow sets a finite discussion limit, and stops sooner when further exchanges add no useful evidence. There is no fixed requirement for two follow-ups.
+You can use a single assessment or advice response, or continue with further questions. The agent and consultant may reach different conclusions; agreement is not required.
 
 ## It's working if
 

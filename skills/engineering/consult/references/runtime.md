@@ -1,6 +1,6 @@
 # CLI runtime
 
-Python 3.10+, standard library only. The runtime executes **one turn**, either starting or continuing a consultation with Claude or Codex. The coordinating host owns the discussion loop, checkpoint budgets, tests and user decisions.
+Python 3.10+, standard library only. The runtime executes **one turn**, either starting or continuing a consultation with Claude or Codex. The coordinating host owns the discussion loop, tests and user decisions.
 
 Resolve `RUNNER` to `scripts/runner.py` beneath the installed `consult` skill, using the skill location supplied by the harness. Installation paths vary; do not substitute a file of that name in the target project. Bundle `consult` with every skill that depends on it. Managed installation of the whole promoted plugin includes it; a selective installer must include both the calling skill and `consult`.
 
@@ -48,13 +48,11 @@ The record retains repository, role, task, context, provider, session and explic
 
 Each conversation has an exclusive `turn.lock` and `state.json`. Overlapping turns and attempts to resume older results are rejected. A failed/running latest result cannot be continued through an earlier successful record, because the provider may have consumed the prompt already. Inspect the failure and start a fresh conversation with a host-authored summary. After abrupt runner termination an abandoned lock or running record can remain; check that no process is active before archiving those diagnostics and starting fresh. Do not delete an active lock to force a continuation.
 
-The runtime imposes no multi-turn budget. The calling skill chooses and enforces a finite budget per checkpoint, and the host stops sooner when further discussion adds no useful evidence.
-
 ## Response and diagnostics
 
 The runner immediately prints a unique artifact directory outside the target checkout, then prints the result path and transport status. The default parent is the system temporary directory; use `--artifacts DIRECTORY` on start for durable diagnostics. Each conversation retains separate turn directories containing `prompt.txt`, `schema.json`, `command.json`, CLI stdout/stderr and `result.json`. Diagnostics may contain private code; keep them outside version control and manage retention accordingly. Do not copy authentication files or secret values into them.
 
-An exit code of zero plus a new `completed` record means a structurally valid, completed exchange. Any nonzero exit, failed record or incomplete CLI completion is a failed exchange. Never infer completion from a session-start event, output-file existence or a previous successful result.
+An exit code of zero plus a new `completed` record means a structurally valid, completed exchange. Any nonzero exit, failed record or incomplete CLI completion is a failed exchange. Inspect its diagnostics and tell the caller what failed; a failed exchange cannot satisfy a required consultation. Never infer completion from a session-start event, output-file existence or a previous successful result.
 
 The `response` object contains exactly:
 
