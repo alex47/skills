@@ -26,7 +26,7 @@ The runner accepts a plain-text prompt and returns a plain-text reply, also save
 
 ## A second opinion with continuity
 
-The calling skill decides the consultant's role, when to ask and what context to provide. `consult` handles the common conversation protocol and CLI connection. It adds no automatic consultation to existing skills just because they are installed together.
+The calling skill decides the consultant's role, when to ask and what context to provide. `consult` handles the common conversation protocol and CLI connection. [code-review](https://aihero.dev/skills-code-review) uses it for an independent assessment within each review axis; other workflows can call it at their own checkpoints.
 
 Follow-ups reuse the same consultant for the same assignment. A different assignment or an independent final review starts fresh. When independent first opinions matter, participants receive the same relevant inputs before seeing each other's conclusions.
 
@@ -61,4 +61,4 @@ You can use a single assessment or advice response, or continue with further que
 
 `consult` is supporting collaboration that another engineering skill can call, and a standalone way to request a Claude or Codex second opinion. It preserves the calling workflow's roles, including its existing [subagents](https://www.aihero.dev/ai-coding-dictionary/subagent).
 
-[code-review](https://aihero.dev/skills-code-review) remains the skill for organizing Standards and Spec review; [implement](https://aihero.dev/skills-implement) owns building changes. Their consultation checkpoints are configured separately. [ask-matt](https://aihero.dev/skills-ask-matt) maps the wider set.
+[code-review](https://aihero.dev/skills-code-review) organizes Standards and Spec review, with a separate consultant for each axis; [implement](https://aihero.dev/skills-implement) owns building changes. [ask-matt](https://aihero.dev/skills-ask-matt) maps the wider set.

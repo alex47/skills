@@ -7,6 +7,8 @@ Use a separate AI agent for an independent assessment, advice, or both. You are 
 
 The consultant stays read-only and cannot make changes or run tests.
 
+**IMPORTANT: The consultant's input is advisory. You decide which ideas or findings are relevant, useful and well-founded.**
+
 Read [runtime.md](references/runtime.md) before starting a consultation. Continue the same conversation for follow-ups. Start a fresh conversation for a new assignment or an independent final review.
 
 ## How to use it

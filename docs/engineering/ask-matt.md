@@ -30,7 +30,7 @@ The skill's leading word is **flow**, a path *through* the skills rather than a 
 - **On-ramps**, for a situation that generates work and then merges onto the main flow: incoming bug reports, something broken, or an effort too foggy and too large to hold in one session.
 - **Codebase health**, upkeep rather than feature work. [improve-codebase-architecture](https://aihero.dev/skills-improve-codebase-architecture) surveys the code for deepening opportunities, and each one it finds re-enters the main flow as an idea.
 - **Standalones**, which sit off every flow and which you use on their own: the prototype, the questionnaire, the research run.
-- **Supporting collaboration**: [consult](https://aihero.dev/skills-consult) brings in Claude or Codex as a read-only peer for approaches, failures or results, defaulting to the counterpart with an optional provider choice. It can stand alone or support a calling skill, which owns its checkpoints. Existing flows gain no automatic consultation merely by installing it.
+- **Supporting collaboration**: `consult` brings in Claude or Codex as a read-only peer for approaches, failures or results, defaulting to the counterpart with an optional provider choice. It can stand alone or support a calling skill, which owns its checkpoints. Existing flows gain no automatic consultation merely by installing it.
 - **A vocabulary layer underneath**, the two references the other skills pull in when the words rather than the process are the problem.
 
 ## The phase boundary
