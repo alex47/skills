@@ -1,3 +1,3 @@
 interface:
   display_name: "Consult"
-  short_description: "Read-only Claude or Codex consultation"
+  short_description: "Assessment, brainstorming and advice by an independent AI agent"

@@ -85,14 +85,4 @@ The default execution timeout is 600 seconds per turn; version and MCP probes ha
 
 Invoke the runner with separate arguments, never a shell command assembled from model output. Arbitrary extra provider flags are unsupported. Avoid broad prefix permission rules for the runner: such rules can also authorize shell chaining around it.
 
-## Validation
-
-Run the offline suite from the repository root:
-
-```text
-python -B -m unittest discover -s tests -p test_consult_runner.py -v
-```
-
-Tests launch fake CLIs as real subprocesses and exercise adapters, continuity, failures, restrictions and timeout cleanup. They do not prove provider authentication, real tool enforcement or model compatibility. Live smoke results and their exact limitations belong in [VALIDATION.md](../VALIDATION.md). Do not present upstream Claudex live results as validation of this adapted runner.
-
 Provider references: [Claude headless usage](https://code.claude.com/docs/en/headless), [Claude CLI](https://code.claude.com/docs/en/cli-reference), [Codex non-interactive mode](https://developers.openai.com/codex/noninteractive), [Codex security](https://developers.openai.com/codex/security).
