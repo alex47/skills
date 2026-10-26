@@ -22,6 +22,8 @@ The selected provider's CLI must be installed and authenticated, and Python 3.10
 
 The consultant needs relevant requirements, repository access and evidence. Your agent provides test results and makes project changes. The CLI retains conversation metadata and diagnostics outside the project.
 
+The runner accepts a plain-text prompt and returns a plain-text reply, also saved to a file. It uses the current project and infers the caller from its session environment. If detection is ambiguous, an explicit provider choice is required. Supplying `--resume` with the saved session path continues the conversation; omitting it starts a new one.
+
 ## A second opinion with continuity
 
 The calling skill decides the consultant's role, when to ask and what context to provide. `consult` handles the common conversation protocol and CLI connection. It adds no automatic consultation to existing skills just because they are installed together.
@@ -53,6 +55,7 @@ You can use a single assessment or advice response, or continue with further que
 - Only the agent responsible for implementation changes your project.
 - The outcome distinguishes decisions from unresolved concerns and tells you what was actually inspected.
 - Missing authentication or a failed consultation is reported, rather than hidden by a substitute answer.
+- A failed consultation is reported without automatic repairs, retries or a new conversation.
 
 ## Where it fits
 

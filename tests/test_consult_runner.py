@@ -4,7 +4,6 @@ Adapted from chaseai-yt/claudex-loop at 53cddc42e39346fb8c6d5d612281a3b1add14e66
 Copyright (c) 2026 Chase AI. MIT: skills/engineering/consult/THIRD-PARTY-NOTICES.md.
 """
 import contextlib
-import copy
 import importlib.util
 import io
 import json
@@ -21,11 +20,8 @@ ROOT = Path(__file__).resolve().parents[1]
 SPEC = importlib.util.spec_from_file_location("consult_runner", ROOT / "skills/engineering/consult/scripts/runner.py")
 runner = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(runner)
-GOOD = {"summary": "Keep the original until the backup is verified.",
-        "conclusions": ["Deleting first can lose the only copy."],
-        "evidence": ["backup.py:1 removes the original before the copy is read."],
-        "proposals": ["Verify the new copy first."], "questions": [],
-        "coverage": ["backup.py"], "limitations": []}
+GOOD = "Keep the original until the backup is verified.\nDeleting it first can lose the only copy."
+CALLER_ENV = {"CLAUDECODE": "", "CODEX_THREAD_ID": "", "CODEX_SESSION_ID": ""}
 
 FAKE_CLI = r'''
 import json, os, pathlib, subprocess, sys, time, uuid
@@ -58,13 +54,18 @@ if case == 'invalid_session':
     session = 'not-a-uuid'
 response = json.loads(os.environ['FAKE_RESPONSE'])
 if case == 'malformed':
-    response = {'summary': 'Missing required fields'}
+    response = {'unexpected': 'Non-text reply'}
 if case == 'unicode':
-    response['summary'] = 'Sound '+chr(0x2192)+' ok'
+    response = 'Sound '+chr(0x2192)+' ok'
+if case == 'empty_reply':
+    response = ''
+if case == 'blank_reply':
+    response = '  \n\t'
 if 'exec' in sys.argv:
     output = pathlib.Path(sys.argv[sys.argv.index('-o')+1])
-    output.write_text('not json' if case == 'bad_json' else json.dumps(response))
-    print(json.dumps({'type':'thread.started', 'thread_id':session}))
+    output.write_text(response if isinstance(response,str) else json.dumps(response), encoding='utf-8')
+    print('not json' if case == 'bad_json' else json.dumps(
+        42 if case == 'malformed' else {'type':'thread.started', 'thread_id':session}))
     if case == 'duplicate_session':
         print(json.dumps({'type':'thread.started', 'thread_id':session}))
     if case == 'turn_failed':
@@ -73,13 +74,13 @@ if 'exec' in sys.argv:
         print(json.dumps({'type':'turn.completed','usage':{'input_tokens':10,'output_tokens':5}}))
 else:
     value = {'type':'result','subtype':'success','is_error':False,'session_id':session,
-             'structured_output':response, 'modelUsage':{'claude-test':{}},
+             'result':response, 'modelUsage':{'claude-test':{}},
              'usage':{'input_tokens':10}, 'permission_denials':[]}
     if case == 'turn_failed':
         value.update(subtype='error_during_execution',is_error=True)
     if case == 'denied':
         value['permission_denials'] = [{'tool_name':'Write'}]
-        value['structured_output']['limitations'] = ['Write was denied; proposal only.']
+        value['result'] = 'Write was denied; proposal only.'
     print('not json' if case == 'bad_json' else json.dumps(
         [{'type':'system','subtype':'init'}, value] if case == 'array' else value))
 '''
@@ -98,30 +99,34 @@ class RunnerTests(unittest.TestCase):
         (self.repo / "backup.py").write_text("original\n")
         self.git("add", ".")
         self.git("commit", "-qm", "baseline")
-        self.assignment = self.root / "assignment.json"
-        self.assignment.write_text(json.dumps({"role": "Design peer", "task": "Assess backup safety",
-                                               "context": "Read backup.py and discuss alternatives."}))
+        self.prompt = self.root / "prompt.txt"
+        self.prompt.write_text("Assess backup safety. Read backup.py and discuss alternatives.")
         self.message = self.root / "follow up.txt"
         self.message.write_text("The host proposes verifying the copy first. Reassess the risk.")
         self.artifacts = self.root / "runs"
         self.cli = self.root / "fake_cli.py"
         self.cli.write_text(FAKE_CLI)
 
+    @staticmethod
+    def resume_path(stderr):
+        return Path(next(line.removeprefix("Resume: ") for line in stderr.splitlines()
+                         if line.startswith("Resume: ")))
+
     def git(self, *args):
         return subprocess.check_output(["git", *args], cwd=self.repo, stderr=subprocess.PIPE).decode()
 
     def invoke(self, host="claude", case="ok", previous=None, extra=()):
-        args = (["continue", "--resume", str(previous), "--message", str(self.message)] if previous else
-                ["start", "--host", host, "--repo", str(self.repo), "--assignment", str(self.assignment),
-                 "--artifacts", str(self.artifacts)]) + list(extra)
-        old = set(self.artifacts.glob("**/result.json"))
+        args = (["--resume", str(previous), "--message", str(self.message)] if previous else
+                ["--repo", str(self.repo), "--message", str(self.prompt),
+                 "--artifacts", str(self.artifacts)] + (["--host", host] if host else [])) + list(extra)
+        old = set(self.artifacts.glob("**/session.json"))
         out, err = io.StringIO(), io.StringIO()
         with patch.object(runner, "cli_prefix", return_value=[sys.executable, str(self.cli)]), \
              patch.dict(os.environ, {"FAKE_CASE": case, "FAKE_RESPONSE": json.dumps(GOOD),
                                      "FAKE_MARKER": str(self.root / "child-survived")}), \
              contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
             code = runner.main(args)
-        new = set(self.artifacts.glob("**/result.json")) - old
+        new = set(self.artifacts.glob("**/session.json")) - old
         path = next(iter(new)) if new else None
         return code, json.loads(path.read_text()) if path else None, path, err.getvalue()
 
@@ -138,21 +143,21 @@ class RunnerTests(unittest.TestCase):
                 self.assertIn("read-only", prompt)
                 self.assertEqual(self.git("status", "--porcelain"), "")
 
-    def test_both_directions_continue_exact_session_and_assignment(self):
+    def test_both_directions_continue_exact_session_and_initial_message(self):
         for host in runner.PROVIDERS:
             with self.subTest(host=host):
                 _, first, path, _ = self.invoke(host, extra=("--model", "chosen-model", "--effort", "high"))
-                self.assignment.write_text("Not used again: assignment is retained.")
+                self.prompt.write_text("Not used again: initial message is retained.")
                 code, second, result, _ = self.invoke(previous=path)
                 self.assertEqual(code, 0, second)
-                for key in ("session_id", "conversation_id", "assignment", "requested_model", "requested_effort"):
+                for key in ("session_id", "conversation_id", "initial_message", "requested_model", "requested_effort"):
                     self.assertEqual(second[key], first[key], key)
                 self.assertIn(self.message.read_text(), (result.parent / "prompt.txt").read_text())
                 argv = json.loads((result.parent / "command.json").read_text())
                 self.assertIn(first["session_id"], argv)
                 self.assertIn("chosen-model", argv)
                 self.assertNotIn("--last", argv)
-                self.assignment.write_text(json.dumps(first["assignment"]))
+                self.prompt.write_text(first["initial_message"])
 
     def test_fresh_conversations_have_distinct_sessions_and_artifacts(self):
         _, first, p1, _ = self.invoke()
@@ -160,6 +165,78 @@ class RunnerTests(unittest.TestCase):
         for key in ("session_id", "conversation_id", "conversation_dir"):
             self.assertNotEqual(first[key], second[key])
         self.assertNotEqual(p1, p2)
+
+    def test_infers_counterpart_from_each_supported_session_marker(self):
+        for marker, value, expected in (("CLAUDECODE", "1", "claude"),
+                                        ("CODEX_THREAD_ID", "thread", "codex"),
+                                        ("CODEX_SESSION_ID", "session", "codex")):
+            with self.subTest(marker=marker), patch.dict(os.environ, {**CALLER_ENV, marker: value}):
+                code, record, _, _ = self.invoke(host=None)
+            self.assertEqual(code, 0, record)
+            self.assertEqual(record["host"], expected)
+            self.assertNotEqual(record["provider"], expected)
+
+    def test_unknown_or_ambiguous_caller_requires_explicit_provider_without_launch(self):
+        for markers in (CALLER_ENV, {**CALLER_ENV, "CLAUDECODE": "1", "CODEX_THREAD_ID": "thread"}):
+            with patch.dict(os.environ, markers), \
+                 patch.object(runner, "execute", wraps=runner.execute) as launch:
+                code, record, _, error = self.invoke(host=None)
+            self.assertEqual(code, 1)
+            self.assertIsNone(record)
+            self.assertIn("unambiguously", error)
+            launch.assert_not_called()
+
+    def test_explicit_provider_works_without_identified_host_and_resume_does_not_infer(self):
+        for markers in (CALLER_ENV, {**CALLER_ENV, "CLAUDECODE": "1", "CODEX_THREAD_ID": "thread"}):
+            for provider in runner.PROVIDERS:
+                with self.subTest(provider=provider, markers=markers), patch.dict(os.environ, markers):
+                    code, first, path, _ = self.invoke(host=None, extra=("--provider", provider))
+                self.assertEqual(code, 0, first)
+                self.assertIsNone(first["host"])
+                self.assertEqual(first["provider"], provider)
+                with patch.object(runner, "infer_host", side_effect=AssertionError("Resume must inherit")):
+                    code, second, _, _ = self.invoke(previous=path)
+                self.assertEqual(code, 0, second)
+                self.assertEqual(first["session_id"], second["session_id"])
+                self.assertEqual(second["provider"], provider)
+
+    def test_plain_text_needs_no_role_or_json_structure(self):
+        for body in ('Think through this idea.\nWhat could go wrong?', '{"not": "an assignment"}', 'Review café handling.'):
+            self.prompt.write_text(body, encoding="utf-8")
+            code, record, path, _ = self.invoke()
+            self.assertEqual(code, 0, record)
+            self.assertEqual(record["initial_message"], body)
+            self.assertIn(body, (path.parent / "prompt.txt").read_text(encoding="utf-8"))
+            self.assertNotIn("assignment", record)
+
+    def test_missing_message_or_resume_file_does_not_start_another_conversation(self):
+        self.prompt.unlink()
+        with patch.object(runner, "execute", wraps=runner.execute) as launch:
+            code, record, _, _ = self.invoke()
+        self.assertEqual(code, 1)
+        self.assertEqual(record["status"], "failed")
+        launch.assert_not_called()
+        with patch.object(runner, "execute", wraps=runner.execute) as launch:
+            code, record, _, _ = self.invoke(previous=self.root / "missing-result.json")
+        self.assertEqual(code, 1)
+        self.assertIsNone(record)
+        launch.assert_not_called()
+
+    def test_failed_turn_runs_once_without_retry_or_provider_switch(self):
+        for provider in runner.PROVIDERS:
+            with patch.object(runner, "execute", wraps=runner.execute) as launch:
+                code, record, _, _ = self.invoke(case="exit", extra=("--provider", provider))
+            self.assertEqual(code, 1)
+            self.assertEqual(record["status"], "failed")
+            self.assertEqual(record["provider"], provider)
+            self.assertEqual(launch.call_count, 1)
+
+    def test_empty_resume_is_not_treated_as_a_new_conversation(self):
+        with patch.object(runner, "execute", wraps=runner.execute) as launch:
+            code, record, _, _ = self.invoke(extra=("--resume", ""))
+        self.assertEqual(code, 1)
+        self.assertIsNone(record)
+        launch.assert_not_called()
 
     def test_explicit_provider_for_each_host_is_retained_on_continue_with_read_only_flags(self):
         for host in runner.PROVIDERS:
@@ -207,8 +284,8 @@ class RunnerTests(unittest.TestCase):
         with patch.object(runner, "execute", wraps=runner.execute) as launch, \
              contextlib.redirect_stderr(io.StringIO()):
             with self.assertRaises(SystemExit) as error:
-                runner.main(["start", "--host", "claude", "--provider", "unknown",
-                             "--repo", str(self.repo), "--assignment", str(self.assignment)])
+                runner.main(["--host", "claude", "--provider", "unknown",
+                             "--repo", str(self.repo), "--message", str(self.prompt)])
         self.assertEqual(error.exception.code, 2)
         launch.assert_not_called()
 
@@ -231,6 +308,7 @@ class RunnerTests(unittest.TestCase):
             self.assertIn("--no-chrome", args)
             self.assertEqual(args[args.index("--permission-mode") + 1], "dontAsk")
             self.assertNotIn("--dangerously-skip-permissions", args)
+            self.assertNotIn("--json-schema", args)
 
     def test_codex_start_and_resume_enforce_sandbox_and_disable_side_effect_tools(self):
         session = "12345678-1234-4567-8123-123456789abc"
@@ -248,6 +326,7 @@ class RunnerTests(unittest.TestCase):
                             "computer_use", "image_generation", "in_app_local_automation"):
                 self.assertTrue(any(args[i:i + 2] == ["--disable", feature] for i in range(len(args))))
             self.assertNotIn("--dangerously-bypass-approvals-and-sandbox", args)
+            self.assertNotIn("--output-schema", args)
 
     def test_failures_keep_diagnostics_and_never_reuse_success(self):
         for host in runner.PROVIDERS:
@@ -273,24 +352,14 @@ class RunnerTests(unittest.TestCase):
         code, record, _, _ = self.invoke("codex", case="denied")
         self.assertEqual(code, 0)
         self.assertTrue(record["permission_denials"])
-        self.assertTrue(record["response"]["limitations"])
+        self.assertIn("Write was denied", record["response"])
 
-    def test_structural_response_validation_does_not_require_agreement_or_findings(self):
-        runner.validate_response(copy.deepcopy(GOOD))
-        blocked = {"summary": "Missing source", **{k: [] for k in runner.LIST_FIELDS}}
-        blocked["limitations"] = ["Required schema is unavailable."]
-        runner.validate_response(blocked)
-        for key, value in (("coverage", "not a list"), ("evidence", [""]), ("summary", "")):
-            bad = copy.deepcopy(GOOD)
-            bad[key] = value
+    def test_reply_accepts_free_form_text_without_fields_and_rejects_empty_or_non_text(self):
+        for value in (GOOD, '# Ideas\n- Try this', '{"arbitrary":"text"}'):
+            self.assertEqual(runner.validate_reply(value), value)
+        for value in ('', ' \n\t', None, {}, []):
             with self.assertRaises(runner.RunError):
-                runner.validate_response(bad)
-        with self.assertRaises(runner.RunError):
-            runner.validate_response({"summary": "ok"})
-        with self.assertRaises(runner.RunError):
-            runner.validate_response({**GOOD, "verdict": "APPROVED"})
-        with self.assertRaises(runner.RunError):
-            runner.validate_response({**GOOD, "coverage": [], "limitations": []})
+                runner.validate_reply(value)
 
     def test_duplicate_json_fields_are_rejected(self):
         with self.assertRaises(runner.RunError):
@@ -348,6 +417,7 @@ class RunnerTests(unittest.TestCase):
 
     def test_corrupt_or_moved_resume_records_are_rejected_without_launch(self):
         for change in ({"repo": None}, {"provider": "unknown"}, {"session_id": "invalid"},
+                       {"initial_message": ""}, {"schema_version": 1}, {"schema_version": 2}, {"schema_version": 99},
                        {"artifacts": "/different/path"}, {"executable": []}):
             _, record, previous, _ = self.invoke()
             record.update(change)
@@ -368,22 +438,54 @@ class RunnerTests(unittest.TestCase):
             for provider in (None, *runner.PROVIDERS):
                 with self.subTest(host=host, provider=provider):
                     selection = ["--provider", provider] if provider else []
-                    call = subprocess.run(command + ["start", "--host", host, "--repo", str(self.repo),
-                                          "--assignment", str(self.assignment), "--artifacts", str(self.artifacts),
+                    call = subprocess.run(command + ["--host", host, "--repo", str(self.repo),
+                                          "--message", str(self.prompt), "--artifacts", str(self.artifacts),
                                           "--cli", str(self.cli)] + selection,
                                           env=settings, capture_output=True, text=True)
                     self.assertEqual(call.returncode, 0, call.stderr + call.stdout)
-                    path = Path(json.loads(call.stdout.splitlines()[-1])["result"])
+                    self.assertEqual(call.stdout, GOOD + "\n")
+                    path = self.resume_path(call.stderr)
                     first = json.loads(path.read_text())
+                    self.assertEqual((path.parent / "reply.txt").read_text(), GOOD)
+                    self.assertFalse((path.parent / "schema.json").exists())
                     expected = provider or next(p for p in runner.PROVIDERS if p != host)
                     self.assertEqual(first["provider"], expected)
                     self.assertEqual(first["host"], host)
-                    call = subprocess.run(command + ["continue", "--resume", str(path), "--message", str(self.message),
+                    call = subprocess.run(command + ["--resume", str(path), "--message", str(self.message),
                                           "--cli", str(self.cli)], env=settings, capture_output=True, text=True)
                     self.assertEqual(call.returncode, 0, call.stderr + call.stdout)
-                    second = json.loads(Path(json.loads(call.stdout.splitlines()[-1])["result"]).read_text())
+                    self.assertEqual(call.stdout, GOOD + "\n")
+                    second = json.loads(self.resume_path(call.stderr).read_text())
                     self.assertEqual(first["session_id"], second["session_id"])
                     self.assertEqual(second["provider"], expected)
+
+    @unittest.skipIf(os.name == "nt", "POSIX executable fixture")
+    def test_minimal_entry_point_infers_host_and_project_and_resumes_from_other_directory(self):
+        self.cli.write_text('#!' + sys.executable + '\n' + FAKE_CLI)
+        self.cli.chmod(0o700)
+        sub = self.repo / "sub"
+        sub.mkdir()
+        command = [sys.executable, "-B", str(ROOT / "skills/engineering/consult/scripts/runner.py")]
+        for host in runner.PROVIDERS:
+            markers = {**CALLER_ENV, **({"CLAUDECODE": "1"} if host == "claude" else {"CODEX_THREAD_ID": "thread"})}
+            settings = dict(os.environ, **markers, FAKE_RESPONSE=json.dumps(GOOD), FAKE_CASE="ok")
+            call = subprocess.run(command + ["--message", str(self.prompt), "--cli", str(self.cli),
+                                  "--artifacts", str(self.artifacts)], cwd=sub, env=settings,
+                                  capture_output=True, text=True)
+            self.assertEqual(call.returncode, 0, call.stderr + call.stdout)
+            path = self.resume_path(call.stderr)
+            first = json.loads(path.read_text())
+            self.assertEqual(first["repo"], str(self.repo))
+            self.assertEqual(first["host"], host)
+            self.assertNotEqual(first["provider"], host)
+            settings.update(CALLER_ENV)
+            call = subprocess.run(command + ["--resume", str(path), "--message", str(self.message),
+                                  "--cli", str(self.cli)], cwd=self.root, env=settings,
+                                  capture_output=True, text=True)
+            self.assertEqual(call.returncode, 0, call.stderr + call.stdout)
+            second = json.loads(self.resume_path(call.stderr).read_text())
+            self.assertEqual(second["session_id"], first["session_id"])
+            self.assertEqual(second["repo"], str(self.repo))
 
     def test_timeout_retains_failure_and_releases_lock(self):
         for host in runner.PROVIDERS:
@@ -400,8 +502,8 @@ class RunnerTests(unittest.TestCase):
         self.assertFalse((self.root / "child-survived").exists())
 
     def test_invalid_inputs_record_failure_without_launch(self):
-        for body in (b'not json', b'{"role":"peer"}', b'\xff'):
-            self.assignment.write_bytes(body)
+        for body in (b'', b' \n\t', b'\xff'):
+            self.prompt.write_bytes(body)
             with patch.object(runner, "execute", wraps=runner.execute) as launch:
                 code, record, _, _ = self.invoke()
             self.assertEqual((code, record["status"]), (1, "failed"))
@@ -422,9 +524,9 @@ class RunnerTests(unittest.TestCase):
         with patch.object(runner.shutil, "which", return_value=None):
             out, err = io.StringIO(), io.StringIO()
             with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
-                code = runner.main(["start", "--host", "codex", "--repo", str(self.repo),
-                                    "--assignment", str(self.assignment), "--artifacts", str(self.artifacts)])
-        record = json.loads(next(self.artifacts.glob("**/result.json")).read_text())
+                code = runner.main(["--host", "codex", "--repo", str(self.repo),
+                                    "--message", str(self.prompt), "--artifacts", str(self.artifacts)])
+        record = json.loads(next(self.artifacts.glob("**/session.json")).read_text())
         self.assertEqual(code, 1)
         self.assertIn("claude is not on PATH", record["error"])
 
@@ -484,13 +586,50 @@ class RunnerTests(unittest.TestCase):
         code, record, _, _ = self.invoke(extra=("--repo", str(plain)))
         self.assertEqual(code, 0, record)
 
-    def test_ascii_console_can_print_paths_after_unicode_response(self):
+    @unittest.skipIf(os.name == "nt", "POSIX executable fixture")
+    def test_public_output_preserves_arbitrary_plain_text_and_saved_reply(self):
+        self.cli.write_text('#!' + sys.executable + '\n' + FAKE_CLI)
+        self.cli.chmod(0o700)
+        command = [sys.executable, "-B", str(ROOT / "skills/engineering/consult/scripts/runner.py"),
+                   "--message", str(self.prompt), "--repo", str(self.repo), "--cli", str(self.cli),
+                   "--artifacts", str(self.artifacts)]
+        for provider in runner.PROVIDERS:
+            for body in ('## Ideas\n- Think through this\n', '{"response":"just text"}', 'Café → choice'):
+                with self.subTest(provider=provider, body=body):
+                    settings = dict(os.environ, FAKE_RESPONSE=json.dumps(body), FAKE_CASE="ok")
+                    call = subprocess.run(command + ["--provider", provider], env=settings,
+                                          capture_output=True, text=True)
+                    self.assertEqual(call.returncode, 0, call.stderr)
+                    self.assertEqual(call.stdout, body if body.endswith("\n") else body + "\n")
+                    session = self.resume_path(call.stderr)
+                    self.assertEqual((session.parent / "reply.txt").read_text(encoding="utf-8"), body)
+
+    @unittest.skipIf(os.name == "nt", "POSIX executable fixture")
+    def test_public_failures_emit_no_reply_and_report_errors_on_stderr(self):
+        self.cli.write_text('#!' + sys.executable + '\n' + FAKE_CLI)
+        self.cli.chmod(0o700)
+        command = [sys.executable, "-B", str(ROOT / "skills/engineering/consult/scripts/runner.py"),
+                   "--message", str(self.prompt), "--repo", str(self.repo), "--cli", str(self.cli),
+                   "--artifacts", str(self.artifacts)]
+        for provider in runner.PROVIDERS:
+            for case in ("exit", "empty_reply", "blank_reply", "turn_failed", "bad_json"):
+                with self.subTest(provider=provider, case=case):
+                    settings = dict(os.environ, FAKE_RESPONSE=json.dumps(GOOD), FAKE_CASE=case)
+                    call = subprocess.run(command + ["--provider", provider], env=settings,
+                                          capture_output=True, text=True)
+                    self.assertNotEqual(call.returncode, 0)
+                    self.assertEqual(call.stdout, "")
+                    self.assertIn("consult:", call.stderr)
+                    self.assertIn("Diagnostics:", call.stderr)
+                    self.assertNotIn("Resume:", call.stderr)
+
+    def test_ascii_console_can_print_plain_text_with_unrepresentable_characters(self):
         out = io.TextIOWrapper(io.BytesIO(), encoding="cp1252")
         with patch.object(runner, "cli_prefix", return_value=[sys.executable, str(self.cli)]), \
              patch.dict(os.environ, {"FAKE_CASE": "unicode", "FAKE_RESPONSE": json.dumps(GOOD)}), \
-             contextlib.redirect_stdout(out):
-            code = runner.main(["start", "--host", "codex", "--repo", str(self.repo),
-                                "--assignment", str(self.assignment), "--artifacts", str(self.artifacts)])
+             contextlib.redirect_stdout(out), contextlib.redirect_stderr(io.StringIO()):
+            code = runner.main(["--host", "codex", "--repo", str(self.repo),
+                                "--message", str(self.prompt), "--artifacts", str(self.artifacts)])
         self.assertEqual(code, 0)
 
 
