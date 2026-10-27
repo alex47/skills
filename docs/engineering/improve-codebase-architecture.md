@@ -2,6 +2,8 @@
 
 `improve-codebase-architecture` surveys a codebase for **deepening opportunities**. These are places where a shallow module (an interface nearly as complex as the thing it hides) could become a deep one. It writes them up as a self-contained HTML report, and then [grills](https://www.aihero.dev/ai-coding-dictionary/grilling) you through the one you pick.
 
+Its exploration subagent uses `consult` for an independent assessment of the same area, with the same criteria and relevant guidance. It completes its own exploration before reading the consultant's response, then compares findings and returns one report of deepening opportunities for the main agent to present.
+
 It never changes the code. The whole run produces a conversation and one HTML file in your OS temp directory. You do the refactor later, in a separate [session](https://www.aihero.dev/ai-coding-dictionary/session), through the normal build flow. This makes it a survey, not a refactoring tool, so you can run it on a codebase you are not ready to touch yet.
 
 Two filters stop the report from becoming generic cleanup advice. First, every candidate must pass the **deletion test**: if you removed this module, would its complexity move behind a smaller interface, or spread across the callers? Only the first case gets a card. Second, unless you point it at a specific area, it reads recent commit history first and focuses the scan on paths that change often. A deepening in code that nobody touches is a refactor that never pays back.
@@ -27,7 +29,9 @@ Where it is confusable with siblings:
 
 ## Prerequisites
 
-None to run it. If `GLOSSARY.md` or ADRs in `docs/adr/` exist, it reads them and uses your domain's own nouns. A candidate then reads as "deepen the Order intake module," not "refactor the FooBarHandler."
+The independent assessment requires the `consult` skill, Python 3.10 or newer, and an installed, authenticated CLI for the selected consultant provider.
+
+If `GLOSSARY.md` or ADRs in `docs/adr/` exist, it reads them and uses your domain's own nouns. A candidate then reads as "deepen the Order intake module," not "refactor the FooBarHandler."
 
 It writes in two places. The report goes to `<tmpdir>/architecture-review-<timestamp>.html`, outside the repo. During the grilling loop it adds or sharpens terms in `GLOSSARY.md`, and creates that file if it does not exist. It also offers to record a rejected candidate as an ADR, so a future run does not suggest it again.
 
