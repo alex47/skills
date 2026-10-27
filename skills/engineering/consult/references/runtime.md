@@ -6,16 +6,18 @@ Replace `RUNNER` with the absolute path to `scripts/runner.py` in the installed 
 
 ## Send a message
 
-Write your prompt to a UTF-8 text file. From the target project, run:
+For each message, run `mktemp /tmp/consult-prompt.XXXXXX`. Write the prompt as UTF-8 text to the file it creates. Use the printed full path as `PROMPT` below.
+
+From the target project, run:
 
 ```text
-python3 "RUNNER" --message "PROMPT.txt"
+python3 "RUNNER" --message "PROMPT"
 ```
 
 To continue, pass the session file path printed by the latest successful call:
 
 ```text
-python3 "RUNNER" --resume "SESSION.json" --message "FOLLOW_UP.txt"
+python3 "RUNNER" --resume "SESSION.json" --message "PROMPT"
 ```
 
 Without `--resume`, a new conversation starts. With it, the existing conversation continues with the same consultant. Run only one turn at a time per conversation. Invalid resume records cause an error, not a new conversation.
