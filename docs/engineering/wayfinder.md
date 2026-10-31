@@ -2,6 +2,8 @@
 
 `wayfinder` takes an effort too big for one agent [session](https://www.aihero.dev/ai-coding-dictionary/session). This is an idea whose **destination** you can name but whose route you cannot yet see. Wayfinder charts it as a shared **map** of **decision tickets** on your issue tracker, then resolves the tickets one at a time until the route is clear.
 
+Before creating the map and tickets, it uses `consult` to review the proposed decision questions and dependencies against the agreed destination, scope and standing preferences. The review looks for missing questions, incorrect or unnecessary dependencies, and questions still too vague to become tickets.
+
 It plans and does not build. Every ticket asks a question, and the answer is a decision, not a slice of a build. The map is finished when nothing is left to decide before someone builds the thing. This rule separates a wayfinder ticket from an ordinary implementation [ticket](https://www.aihero.dev/ai-coding-dictionary/ticket), and it is the rule agents break most often. When the map clears, wayfinder hands off and does not continue into code.
 
 ## When to reach for it
@@ -21,6 +23,8 @@ It is the heaviest flow in the set, so the trigger is narrow. The effort must be
 Greenfield is not a requirement. People use wayfinder routinely on legacy and half-built codebases, and it can be more useful there, because much of the fog is "what is already true here" rather than "what should we do".
 
 ## Prerequisites
+
+The initial map review requires the `consult` skill, Python 3.10 or newer, and an installed, authenticated CLI for the selected consultant provider.
 
 The map and its tickets live on the repo's issue tracker, so wayfinder needs the tracker setup from [setup-matt-pocock-skills](https://aihero.dev/skills-setup-matt-pocock-skills). That step writes a "Wayfinding operations" section. The section describes how to express the map, its child tickets, blocking edges, and frontier queries on GitHub, GitLab, or local markdown. Wayfinder finds that doc through the pointer in your `CLAUDE.md` / `AGENTS.md`, not at a fixed path. With no tracker configured, it falls back to local markdown files.
 
