@@ -9,6 +9,8 @@ The consultant stays read-only and cannot make changes or run tests.
 
 **IMPORTANT: The consultant's input is advisory. You decide which ideas or findings are relevant, useful and well-founded.**
 
+The consultant does not inherit your conversation or loaded skills. Include the relevant task instructions, constraints and decisions when briefing it.
+
 Read [runtime.md](references/runtime.md) before starting a consultation. Continue the same conversation for follow-ups. Start a fresh conversation for a new assignment or an independent final review.
 
 ## How to use it

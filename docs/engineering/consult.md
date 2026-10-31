@@ -20,7 +20,7 @@ Type `/consult`, or the agent reaches for it automatically when you request a Cl
 
 The selected provider's CLI must be installed and authenticated, and Python 3.10 or newer must be available. Authentication in the host application alone may not authenticate its CLI. A selective skill installation must include `consult` alongside any skill that calls it.
 
-The consultant needs relevant requirements, repository access and evidence. Your agent provides test results and makes project changes. The CLI retains conversation metadata and diagnostics outside the project.
+The consultant needs relevant requirements, repository access and evidence. It does not inherit your agent's conversation or loaded skills, so your agent includes the relevant task instructions, constraints and decisions in its brief. Your agent provides test results and makes project changes. The CLI retains conversation metadata and diagnostics outside the project.
 
 The runner accepts a plain-text prompt and returns a plain-text reply, also saved to a file. It uses the current project and infers the caller from its session environment. If detection is ambiguous, an explicit provider choice is required. Supplying `--resume` with the saved session path continues the conversation; omitting it starts a new one.
 
