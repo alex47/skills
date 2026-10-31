@@ -1,5 +1,11 @@
 # mattpocock-skills
 
+## 1.3.3-consult.2
+
+### Patch Changes
+
+- Flush streamed input on Windows PowerShell 5.1 and include test failure details in CI annotations.
+
 ## 1.3.3-consult.1
 
 ### Patch Changes

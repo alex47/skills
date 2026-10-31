@@ -66,10 +66,16 @@ function Serve-ClaudeStream($Conversation, $Turn, $Timeout, $Settings, $CliArgum
                 $frame = @{ type = 'user'; message = @{ role = 'user'; content = (Read-Text (Join-Path $Turn 'prompt.txt')) }; parent_tool_use_id = $null; session_id = $sessionId }
                 $bytes = $utf8.GetBytes((ConvertTo-Json $frame -Compress -Depth 10) + "`n")
                 $inputTask = $process.StandardInput.BaseStream.WriteAsync($bytes, 0, $bytes.Length)
+                $flushing = $false
                 $watch = [Diagnostics.Stopwatch]::StartNew()
                 while ($true) {
                     if ($watch.Elapsed.TotalSeconds -ge $Timeout) { throw 'Turn timed out.' }
-                    if ($inputTask.IsFaulted) { $inputTask.GetAwaiter().GetResult() }
+                    if ($inputTask.IsFaulted) { [void]$inputTask.GetAwaiter().GetResult() }
+                    if (!$flushing -and $inputTask.IsCompleted) {
+                        [void]$inputTask.GetAwaiter().GetResult()
+                        $inputTask = $process.StandardInput.BaseStream.FlushAsync()
+                        $flushing = $true
+                    }
                     if (!$nextLine.IsCompleted) { [Threading.Thread]::Sleep(20); continue }
                     $line = $nextLine.GetAwaiter().GetResult()
                     if ($null -eq $line) { throw 'Claude exited before replying; inspect stderr.txt.' }

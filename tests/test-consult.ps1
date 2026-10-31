@@ -70,7 +70,7 @@ function Success($Result) {
     Assert ($Result.Code -eq 0) $failure
     Assert ($Result.Err -eq '') ('Unexpected stderr: ' + $Result.Err)
     $lines = $Result.Out.TrimEnd("`r", "`n") -split '\r?\n'
-    Assert ($lines.Count -eq 2 -and $lines[0].StartsWith('Reply: ') -and $lines[1].StartsWith('Session: ')) 'Success must print only two labeled paths.'
+    Assert ($lines.Count -eq 2 -and $lines[0].StartsWith('Reply: ') -and $lines[1].StartsWith('Session: ')) ('Success must print only two labeled paths. Actual: ' + $Result.Out)
     $reply = $lines[0].Substring(7)
     $session = $lines[1].Substring(9)
     Assert ([IO.Path]::IsPathRooted($reply) -and [IO.Path]::IsPathRooted($session)) 'Output paths must be absolute.'
@@ -395,6 +395,12 @@ try {
         Assert ((Read (Join-Path $repo 'original.txt')) -eq 'untouched') 'Project file changed.'
     }
     [Console]::Out.WriteLine("Passed $count $Runner scenarios.")
+} catch {
+    if ($env:GITHUB_ACTIONS -eq 'true') {
+        $detail = $_.Exception.Message.Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A')
+        [Console]::Out.WriteLine('::error::' + $detail)
+    }
+    throw
 } finally {
     Remove-Item -LiteralPath $temp -Recurse -Force -ErrorAction SilentlyContinue
 }
