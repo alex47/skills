@@ -1,5 +1,11 @@
 # mattpocock-skills
 
+## 1.3.3-consult.4
+
+### Patch Changes
+
+- Include provider stderr when a live conversation fails during startup.
+
 ## 1.3.3-consult.3
 
 ### Patch Changes

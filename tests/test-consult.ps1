@@ -95,7 +95,9 @@ function Start-Live($Extra = @()) {
     try {
         Assert ($call.Out.Wait(15000)) 'Live conversation did not report its first reply.'
         $firstLine = $call.Out.GetAwaiter().GetResult()
-        if ($null -eq $firstLine) { throw ('Live startup failed: ' + $call.Err.GetAwaiter().GetResult()) }
+        if ($null -eq $firstLine) {
+            [void](Success @{ Code = 1; Out = ''; Err = $call.Err.GetAwaiter().GetResult() })
+        }
         $secondLine = $call.Process.StandardOutput.ReadLineAsync()
         Assert ($secondLine.Wait(15000)) 'Live conversation did not report its session.'
         $paths = Success @{ Code = 0; Out = $firstLine + "`n" + $secondLine.GetAwaiter().GetResult() + "`n"; Err = '' }
