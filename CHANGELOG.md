@@ -1,34 +1,12 @@
 # mattpocock-skills
 
-## 1.3.3-consult.5
-
-### Patch Changes
-
-- Set streaming stdin to UTF-8 without a byte-order mark on Windows PowerShell 5.1.
-
-## 1.3.3-consult.4
-
-### Patch Changes
-
-- Include provider stderr when a live conversation fails during startup.
-
-## 1.3.3-consult.3
-
-### Patch Changes
-
-- Keep streaming stdin available in PowerShell wrappers, isolate parallel fixture writes and suppress watchdog job notifications on macOS.
-
-## 1.3.3-consult.2
-
-### Patch Changes
-
-- Flush streamed input on Windows PowerShell 5.1 and include test failure details in CI annotations.
-
-## 1.3.3-consult.1
+## 1.3.3
 
 ### Patch Changes
 
 - Keep Claude consultations in a live process when its session directory is blocked. Follow-ups retain conversation and tool context without changing the existing login, configuration or filesystem permissions.
+
+- Support streamed conversations across Bash, Windows PowerShell and PowerShell 7, including UTF-8 replies and concurrent consultations.
 
 ## 1.3.2
 
