@@ -31,7 +31,11 @@ if ($args -contains '--input-format') {
     $turns = @()
     Save 'live-pid.txt' $PID
     while ($null -ne ($line = [Console]::In.ReadLine())) {
-        $frame = ConvertFrom-Json $line
+        try { $frame = ConvertFrom-Json $line }
+        catch {
+            $head = $line.Substring(0, [Math]::Min(32, $line.Length))
+            throw ('Invalid stream input prefix: ' + [BitConverter]::ToString($utf8.GetBytes($head)) + '. ' + $_.Exception.Message)
+        }
         Save 'prompt.txt' $frame.message.content
         $turns += $frame.message.content
         Save 'turn-count.txt' $turns.Count

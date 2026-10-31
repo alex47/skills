@@ -1,5 +1,11 @@
 # mattpocock-skills
 
+## 1.3.3-consult.5
+
+### Patch Changes
+
+- Set streaming stdin to UTF-8 without a byte-order mark on Windows PowerShell 5.1.
+
 ## 1.3.3-consult.4
 
 ### Patch Changes

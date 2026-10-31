@@ -2,6 +2,7 @@
 $ErrorActionPreference = 'Stop'
 $utf8 = New-Object System.Text.UTF8Encoding($false)
 [Console]::OutputEncoding = $utf8
+[Console]::InputEncoding = $utf8
 $isWindowsPlatform = [Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT
 
 function Write-Text($Path, [string]$Text) { [IO.File]::WriteAllText($Path, $Text, $utf8) }
