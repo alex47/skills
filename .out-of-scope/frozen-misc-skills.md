@@ -12,7 +12,7 @@ If a `misc/` skill is promoted back into `engineering/` or `productivity/` later
 
 ## Prior requests
 
-- #14: "Potential typo in setup-pre-commit/SKILL.md"
-- #301: "`block-dangerous-git.sh` is bypassed by any git global option (e.g. `git -C <dir> push`)"
-- #465: "git-guardrails-claude-code documentation is missing benefits over built in Claude code deny rules"
-- #898: "git-guardrails-claude-code: hook fails open without jq and misses common git spellings"
+- mattpocock/skills#14: "Potential typo in setup-pre-commit/SKILL.md"
+- mattpocock/skills#301: "`block-dangerous-git.sh` is bypassed by any git global option (e.g. `git -C <dir> push`)"
+- mattpocock/skills#465: "git-guardrails-claude-code documentation is missing benefits over built in Claude code deny rules"
+- mattpocock/skills#898: "git-guardrails-claude-code: hook fails open without jq and misses common git spellings"

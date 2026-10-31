@@ -13,8 +13,8 @@ Type `/consult`, or the agent reaches for it automatically when you request a Cl
 | Your situation | Reach for |
 | --- | --- |
 | You want a separate Claude or Codex peer to challenge an approach, investigate a concern or reassess a proposal | `consult` |
-| You want Standards and Spec reviewed as separate axes over a diff | [code-review](https://aihero.dev/skills-code-review) |
-| You need an agent to implement a concrete change | [implement](https://aihero.dev/skills-implement) |
+| You want Standards and Spec reviewed as separate axes over a diff | [code-review](code-review.md) |
+| You need an agent to implement a concrete change | [implement](implement.md) |
 
 ## Prerequisites
 
@@ -26,7 +26,7 @@ The runner saves the consultant's reply in a plain-text file and prints its full
 
 ## A second opinion with continuity
 
-The calling skill decides the consultant's role, when to ask and what context to provide. `consult` handles the common conversation protocol and CLI connection. `implement` and `implement-spec`'s implementer subagents use it for implementation advice. [code-review](https://aihero.dev/skills-code-review) uses fresh consultants for independent assessments within each review axis. `diagnosing-bugs` requests independent hypotheses after reproducing and minimising the bug. The `improve-codebase-architecture` exploration subagent compares independent assessments of deepening opportunities. `to-tickets` reviews draft breakdowns involving shared changes, coordination between parallel tickets or staged migrations before user approval. `to-spec` reviews its draft for contradictions, ambiguous requirements and gaps before publication, with the host checking feedback against the conversation. `wayfinder` reviews proposed decision tickets and dependencies before creating the map and tickets. Other workflows can call it at their own checkpoints.
+The calling skill decides the consultant's role, when to ask and what context to provide. `consult` handles the common conversation protocol and CLI connection. `implement` and `implement-spec`'s implementer subagents use it for implementation advice. [code-review](code-review.md) uses fresh consultants for independent assessments within each review axis. `diagnosing-bugs` requests independent hypotheses after reproducing and minimising the bug. The `improve-codebase-architecture` exploration subagent compares independent assessments of deepening opportunities. `to-tickets` reviews draft breakdowns involving shared changes, coordination between parallel tickets or staged migrations before user approval. `to-spec` reviews its draft for contradictions, ambiguous requirements and gaps before publication, with the host checking feedback against the conversation. `wayfinder` reviews proposed decision tickets and dependencies before creating the map and tickets. Other workflows can call it at their own checkpoints.
 
 Follow-ups reuse the same consultant for the same assignment. A different assignment or an independent final review starts fresh. When independent first opinions matter, participants receive the same relevant inputs before seeing each other's conclusions.
 
@@ -65,4 +65,4 @@ You can use a single assessment or advice response, or continue with further que
 
 `consult` is supporting collaboration that another engineering skill can call, and a standalone way to request a Claude or Codex second opinion. It preserves the calling workflow's roles, including its existing [subagents](https://www.aihero.dev/ai-coding-dictionary/subagent).
 
-[code-review](https://aihero.dev/skills-code-review) organizes Standards and Spec review, with a separate consultant for each axis; [implement](https://aihero.dev/skills-implement) owns building changes. [ask-matt](https://aihero.dev/skills-ask-matt) maps the wider set.
+[code-review](code-review.md) organizes Standards and Spec review, with a separate consultant for each axis; [implement](implement.md) owns building changes. [ask-matt](ask-matt.md) maps the wider set.

@@ -1,6 +1,6 @@
 # Scope
 
-This repo is the set of skills I use every day. It is curated: ideas are welcome, and each one is judged against the bar below. Issues are for tracking changes to the skills. Questions and discussion go to [GitHub Discussions](https://github.com/mattpocock/skills/discussions).
+This repo extends Matt Pocock Skills with independent AI consultation. It is curated: ideas are welcome, and each one is judged against the bar below. Use [Issues](https://github.com/alex47/skills/issues) for questions and changes to this fork.
 
 ## The bar
 

@@ -10,5 +10,5 @@ If a sub-agent recurses or fans out without bound, report it to the harness.
 
 ## Prior requests
 
-- #530: "research skill: spawned background agent can recursively re-spawn another agent (uncontrolled nesting)"
-- #573: "code-review sub-agents recursively invoke /code-review and fan out" (PR #1186, "code-review: make the Standards and Spec sub-agents leaf reviewers", closed)
+- mattpocock/skills#530: "research skill: spawned background agent can recursively re-spawn another agent (uncontrolled nesting)"
+- mattpocock/skills#573: "code-review sub-agents recursively invoke /code-review and fan out" (PR mattpocock/skills#1186, "code-review: make the Standards and Spec sub-agents leaf reviewers", closed)

@@ -1,5 +1,7 @@
 # Ship the skill set as a native Claude Code plugin; defer a native Codex plugin
 
+The dated decisions below record the upstream project's installation history. This fork uses the `alex47` marketplace; current installation instructions live in [the install block](../install-block.md).
+
 These skills have always been installable via [skills.sh](https://skills.sh/mattpocock/skills) (`npx skills add mattpocock/skills`), which copies editable skill files into a user's project across Claude Code, Codex, and other Agent-Skills-standard harnesses. A recurring request is a **plug-and-play** distribution: subscribe to the set as a read-only, always-current bundle you don't edit, rather than a fork you own. That is exactly what native plugin systems provide.
 
 We ship a native **Claude Code plugin** and, for now, **defer** a native **Codex plugin**. The split is forced by how each ecosystem's plugin manifest selects skills, against this repo's bucketed layout.
@@ -51,3 +53,7 @@ On Codex 0.161.0, the `@mattpocock` marketplace install loads the promoted model
 `@mattpocock` is now the lead route on Codex, Copilot and VS Code, at the cost of a one-time opt-in on Copilot. Claude Code stays on `claude-plugins-official`, as in the 2026-08-05 update, because it auto-updates by default and needs no `marketplace add`.
 
 The version invariant above now applies to every managed route. `npm run version` already keeps it by running `scripts/sync-plugin-version.mjs`. `marketplace.json` has no `version` field, so it can't drift.
+
+## Update, 2026-10-31: fork installation
+
+This fork retains the `mattpocock-skills` plugin name and uses `alex47` as its marketplace identifier. Claude Code, Codex and Copilot add `alex47/skills` before installing from that marketplace. The official Claude marketplace continues to serve upstream. Documentation links within the fork are relative so they follow the branch being read.

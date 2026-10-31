@@ -1,14 +1,14 @@
 blank_issues_enabled: false
 contact_links:
   - name: Question or "how do I...?"
-    url: https://github.com/mattpocock/skills/discussions/categories/q-a
-    about: Ask in Q&A. Issues are for bugs and changes to existing skills only.
+    url: https://github.com/alex47/skills/issues
+    about: Ask a question about this fork in Issues.
   - name: New skill idea, or a skill you want to donate
-    url: https://github.com/mattpocock/skills/discussions/categories/ideas
-    about: Post it in Ideas. New skills do not start as issues.
+    url: https://github.com/alex47/skills/issues
+    about: Review SCOPE.md before proposing a new skill.
   - name: Support for another harness or issue tracker
-    url: https://github.com/mattpocock/skills/discussions/categories/ideas
-    about: Post it in Ideas. Read the out-of-scope notes first, most trackers are already ruled out.
+    url: https://github.com/alex47/skills/issues
+    about: Read the out-of-scope notes before asking about another harness or tracker.
   - name: Is my request out of scope?
-    url: https://github.com/mattpocock/skills/blob/main/SCOPE.md
+    url: https://github.com/alex47/skills/blob/main/SCOPE.md
     about: The bar every issue must clear, and the requests this repo has already decided not to take.

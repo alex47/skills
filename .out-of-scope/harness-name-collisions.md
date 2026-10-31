@@ -21,8 +21,8 @@ If a harness gives you no way to reach a namespaced or renamed skill at all, rep
 
 ## Prior requests
 
-- #423: "/code-review shadows Claude Code own review skill"
-- #483: "/code-review name clash with Claude Code built-in"
-- #857: "Rename the research skill to avoid conflict with Copilot's built-in /research command"
-- #1019: "Shorthand `/prototype` conflicts with hidden new Claude Code built-in skill `/prototype`"
-- #1037: "Skill name overlap with devin cli inbuilt commands"
+- mattpocock/skills#423: "/code-review shadows Claude Code own review skill"
+- mattpocock/skills#483: "/code-review name clash with Claude Code built-in"
+- mattpocock/skills#857: "Rename the research skill to avoid conflict with Copilot's built-in /research command"
+- mattpocock/skills#1019: "Shorthand `/prototype` conflicts with hidden new Claude Code built-in skill `/prototype`"
+- mattpocock/skills#1037: "Skill name overlap with devin cli inbuilt commands"

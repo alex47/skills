@@ -8,4 +8,4 @@
 
 ## Prior requests
 
-- #1238: "retro: load writing-for-agents only before writing" (closed)
+- mattpocock/skills#1238: "retro: load writing-for-agents only before writing" (closed)

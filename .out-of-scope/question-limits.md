@@ -15,4 +15,4 @@ Adding a hard cap would also conflate two different failure modes: a model that 
 
 ## Prior requests
 
-- #44: "Codex just asked me 200 questions"
+- mattpocock/skills#44: "Codex just asked me 200 questions"

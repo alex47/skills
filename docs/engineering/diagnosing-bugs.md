@@ -15,11 +15,11 @@ Reach for it on the hard ones: a bug you can't solve at first look, an intermitt
 | A specific defect you can describe as a symptom | This skill |
 | A slow endpoint or a timing regression with a known before-and-after | This skill. It has a performance branch (measure a baseline, then bisect) |
 | "Where are the bottlenecks in this codebase?", no specific symptom | Not this skill. It diagnoses one known failure, it does not audit |
-| A raw bug report from someone else, not yet confirmed or written up | [triage](https://aihero.dev/skills-triage) first |
-| Throwaway code to answer a design question, not chase a defect | [prototype](https://aihero.dev/skills-prototype) |
-| Building a planned behaviour test-first | [tdd](https://aihero.dev/skills-tdd) |
-| Asking what would have prevented the bug, once it is fixed | [retro](https://aihero.dev/skills-retro), run in the same session |
-| No good seam exists to lock the bug down | [improve-codebase-architecture](https://aihero.dev/skills-improve-codebase-architecture), which you start yourself |
+| A raw bug report from someone else, not yet confirmed or written up | [triage](triage.md) first |
+| Throwaway code to answer a design question, not chase a defect | [prototype](prototype.md) |
+| Building a planned behaviour test-first | [tdd](tdd.md) |
+| Asking what would have prevented the bug, once it is fixed | [retro](retro.md), run in the same session |
+| No good seam exists to lock the bug down | [improve-codebase-architecture](improve-codebase-architecture.md), which you start yourself |
 
 ## Prerequisites
 
@@ -95,6 +95,6 @@ v1.0.0 renamed it to `/diagnosing-bugs`. The old name no longer exists. Anything
 
 ## Where it fits
 
-`diagnosing-bugs` is a reach-for-it-anytime standalone. You start it when something is broken, and it ends when the fix and its regression test are in. It keeps no state; its independent consultation requires the tooling described above. [ask-matt](https://aihero.dev/skills-ask-matt) routes "Something's broken" here.
+`diagnosing-bugs` is a reach-for-it-anytime standalone. You start it when something is broken, and it ends when the fix and its regression test are in. It keeps no state; its independent consultation requires the tooling described above. [ask-matt](ask-matt.md) routes "Something's broken" here.
 
-Two neighbours matter. [retro](https://aihero.dev/skills-retro) comes after it: once the fix is in, run it in the same session to ask what would have prevented the bug, while the session has more information than it had at the start. `diagnosing-bugs` never invokes `retro` itself, because `retro` is user-invoked. [triage](https://aihero.dev/skills-triage) comes before it for bugs that arrive as raw reports from other people, and does a shallower version of the same first two phases.
+Two neighbours matter. [retro](retro.md) comes after it: once the fix is in, run it in the same session to ask what would have prevented the bug, while the session has more information than it had at the start. `diagnosing-bugs` never invokes `retro` itself, because `retro` is user-invoked. [triage](triage.md) comes before it for bugs that arrive as raw reports from other people, and does a shallower version of the same first two phases.

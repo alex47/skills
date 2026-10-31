@@ -12,8 +12,8 @@ If you prefer your harness's question tool, say so in your own `CLAUDE.md` / `AG
 
 ## Prior requests
 
-- #19: "grill-me: not always using the question tool"
-- #643: "Proposal: Use AskQuestion for structured input during grilling sessions"
-- #840: "Use host's question tool for grilling sessions"
-- #1107: "Grilling doesn't use Agent's native QA tool OOTB"
-- #1152: "Proposal: experimental HTML questionnaire mode for batch grilling"
+- mattpocock/skills#19: "grill-me: not always using the question tool"
+- mattpocock/skills#643: "Proposal: Use AskQuestion for structured input during grilling sessions"
+- mattpocock/skills#840: "Use host's question tool for grilling sessions"
+- mattpocock/skills#1107: "Grilling doesn't use Agent's native QA tool OOTB"
+- mattpocock/skills#1152: "Proposal: experimental HTML questionnaire mode for batch grilling"

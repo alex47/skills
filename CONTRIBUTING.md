@@ -6,11 +6,11 @@ Every issue is judged against the bar in [`SCOPE.md`](./SCOPE.md). Read it first
 
 | You have | Go to |
 | --- | --- |
-| A bug in a skill | [Bug issue](https://github.com/mattpocock/skills/issues/new?template=bug.yml) |
-| A change to an existing skill | [Idea or feedback issue](https://github.com/mattpocock/skills/issues/new?template=idea.yml) |
-| A question, or "how do I...?" | [Discussions: Q&A](https://github.com/mattpocock/skills/discussions/categories/q-a) |
-| An idea for a new skill, or a skill to donate | [Discussions: Ideas](https://github.com/mattpocock/skills/discussions/categories/ideas) |
-| Support for another harness or issue tracker | [Discussions: Ideas](https://github.com/mattpocock/skills/discussions/categories/ideas), after you read [`.out-of-scope/`](./.out-of-scope) |
+| A bug in a skill | [Bug issue](https://github.com/alex47/skills/issues/new?template=bug.yml) |
+| A change to an existing skill | [Idea or feedback issue](https://github.com/alex47/skills/issues/new?template=idea.yml) |
+| A question, or "how do I...?" | [Issues](https://github.com/alex47/skills/issues) |
+| An idea for a new skill, or a skill to donate | [Issues](https://github.com/alex47/skills/issues) |
+| Support for another harness or issue tracker | [Issues](https://github.com/alex47/skills/issues), after you read [`.out-of-scope/`](./.out-of-scope) |
 
 Pull requests are open to collaborators only, so describe the fix in an issue instead.
 
