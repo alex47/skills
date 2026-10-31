@@ -2,7 +2,9 @@
 
 `implement` builds work that has already been decided. You point it at a [ticket](https://www.aihero.dev/ai-coding-dictionary/ticket), a [spec](https://www.aihero.dev/ai-coding-dictionary/spec), or the plan you just agreed in the conversation, and it writes the code, drives [tdd](https://aihero.dev/skills-tdd) at the seams, typechecks as it goes, runs [code-review](https://aihero.dev/skills-code-review) at the end, and commits to the current branch.
 
-It never reopens the plan. There is no interview, no clarifying round, no proposal of a different approach. Whatever was settled upstream is the input, and the skill's whole job is to turn that into a commit. That is what separates it from typing "build this" at a fresh [agent](https://www.aihero.dev/ai-coding-dictionary/agent), which often redesigns the work while it builds it.
+The implementing [agent](https://www.aihero.dev/ai-coding-dictionary/agent) uses `consult` to discuss its approach and can continue the same consultation during implementation, including while working through `tdd`. The consultant offers advice; your agent makes decisions and changes. The agreed spec or tickets remain the assignment.
+
+The final `code-review` uses fresh consultants for independent Standards and Spec assessments, separate from the implementation discussion.
 
 ## When to reach for it
 
@@ -26,17 +28,20 @@ The same-session case is worth naming because the skill's own first line doesn't
 
 `implement` commits to the branch you are on. It does not create one, and it does not ask. Check you are on the branch you want the work on before you start.
 
+Consultation requires the `consult` skill and an installed, authenticated CLI for the selected consultant provider.
+
 If the tickets came from [to-tickets](https://aihero.dev/skills-to-tickets), [setup-matt-pocock-skills](https://aihero.dev/skills-setup-matt-pocock-skills) configured the tracker they live on. `code-review` reads the same configuration to find the originating spec at close-out.
 
 ## What one run does
 
-A run has five steps, in order:
+A run has six steps, in order:
 
 1. Read the ticket or spec and work out the seams.
-2. Drive [tdd](https://aihero.dev/skills-tdd) at the pre-agreed seams, one red-green slice at a time.
-3. Typecheck often, run single test files as it goes.
-4. Run the full test suite once, at the end.
-5. Run [code-review](https://aihero.dev/skills-code-review), then commit to the current branch.
+2. Discuss the implementation approach with `consult`, sharing the task details, relevant context, initial thinking and open questions.
+3. Drive [tdd](https://aihero.dev/skills-tdd) at the pre-agreed seams, one red-green slice at a time. Follow-up discussion with the same consultant is optional.
+4. Typecheck often, run single test files as it goes.
+5. Run the full test suite once, at the end.
+6. Run [code-review](https://aihero.dev/skills-code-review), then commit to the current branch.
 
 One run covers one ticket. The tickets [to-tickets](https://aihero.dev/skills-to-tickets) produces are tracer-bullet vertical slices sized to fit a single fresh [context window](https://www.aihero.dev/ai-coding-dictionary/context-window), so the intended rhythm is: clear context, implement one ticket, commit, clear again. Each ticket is self-contained, so you can discard the previous ticket's context.
 

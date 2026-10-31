@@ -8,7 +8,11 @@ Implement the work described by the user in the spec or tickets.
 
 If the user passes a ticket reference, fetch it from the issue tracker and state its title before starting. If the reference is ambiguous, ask.
 
+Call the Skill tool with `consult` to discuss your implementation approach. Share the task details, relevant context, your initial thinking and any open questions.
+
 Call the Skill tool with "tdd" where possible, at pre-agreed seams.
+
+Reuse the same consultation during implementation, including when working through `tdd`. You can discuss design choices, unexpected behaviour, failing tests or possible solutions. Follow-up discussion is optional.
 
 Run typechecking regularly, single test files regularly, and the full test suite once at the end.
 

@@ -24,7 +24,15 @@ This command is _informed_ by the project's domain model and built on a shared d
 
 Read the project's domain glossary (`GLOSSARY.md`) and any ADRs in the area you're touching first.
 
-Then spawn a sub-agent with a fresh context window to walk the codebase. Don't follow rigid heuristics; explore organically and note where you experience friction:
+Then spawn a sub-agent with a fresh context window to walk the codebase. Include the chosen scope, the exploration criteria below, relevant glossary and ADR references, and applicable `codebase-design` guidance in its prompt.
+
+Include the following instructions **verbatim** in its prompt:
+
+> Call the Skill tool with `consult` for an independent assessment of deepening opportunities. Give the consultant the same exploration scope, criteria and relevant guidance provided to you.
+>
+> Start the consultant's assessment as a background task, then carry out your own exploration independently. After completing your exploration, collect the consultant's response, waiting for it to finish if necessary. Compare findings and return one report of deepening opportunities.
+
+Don't follow rigid heuristics; explore organically and note where you experience friction:
 
 - Where does understanding one concept require bouncing between many small modules?
 - Where are modules **shallow**, with an interface nearly as complex as the implementation?

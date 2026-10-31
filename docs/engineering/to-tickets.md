@@ -22,13 +22,15 @@ Tickets that `to-tickets` produced are agent-ready by construction. Don't run [t
 
 `to-tickets` publishes into a tracker, so [setup-matt-pocock-skills](https://aihero.dev/skills-setup-matt-pocock-skills) must have configured one for this repo, along with the triage-label vocabulary. Either kind works: a real tracker like GitHub or Linear, or local markdown files under `.scratch/`, which work with no extra setup.
 
+When a draft needs consultation, it requires the `consult` skill and an installed, authenticated CLI for the selected consultant provider.
+
 ## Tracer bullets, not layers
 
 A **horizontal** slice ships one layer of the change. Nothing works until every layer has landed, and each ticket's acceptance criteria have to reach into work that another ticket owns. A **vertical** slice (the tracer bullet) ships one thin path through all the layers at once, so it is verifiable alone and owns everything it grades.
 
 This is the rule people break most often. One team ran a 26-ticket stack sliced by layer (corpus, producer, aggregator, selector) and got roughly twenty agent runs per closed ticket, about three quarters of them rework. Their own post-mortem traced every failure class back to the horizontal slicing rather than to the implementations.
 
-Two things happen before anything is published. `to-tickets` looks for prefactoring (the principle "make the change easy, then make the easy change") and orders that work first. Then it presents the breakdown as a numbered list and quizzes you on it: is the granularity right, are the blocking edges real, should anything merge or split. Nothing reaches the tracker until you approve, and that quiz is the place to push back.
+Before anything is published, `to-tickets` looks for prefactoring (the principle "make the change easy, then make the easy change") and orders that work first. When the breakdown involves shared changes, coordination between parallel tickets or a staged migration, it uses `consult` to review requirement coverage, ticket boundaries and blocking dependencies. It considers that feedback before presenting the breakdown as a numbered list and quizzing you on it: is the granularity right, are the blocking edges real, should anything merge or split. Nothing reaches the tracker until you approve, and that quiz is the place to push back.
 
 ## Blocking edges
 

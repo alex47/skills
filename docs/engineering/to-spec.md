@@ -21,11 +21,15 @@ Reach for it when the build is too big for one agent [session](https://www.aiher
 
 `to-spec` publishes the spec as an issue, so [setup-matt-pocock-skills](https://aihero.dev/skills-setup-matt-pocock-skills) must first configure a tracker and the triage-label vocabulary for this repo. Either kind of tracker works: a real tracker like GitHub, or local markdown files under `.scratch/`, which work with no extra setup.
 
+The draft review requires the `consult` skill and an installed, authenticated CLI for the selected consultant provider.
+
 ## The spec is a decision record
 
 The spec exists because context windows end. You settled many things while [grilling](https://www.aihero.dev/ai-coding-dictionary/grilling): the shape of the solution, the choices you argued through, and what you deliberately refused. All of that is in one conversation that you are about to clear. The spec keeps it.
 
-So the spec does not validate or decide anything. It records what you decided, in your project's own vocabulary, so a fresh session can pick up the work without you explaining it again. If the spec states something you never said, that is a defect.
+The spec records what you decided, in your project's own vocabulary, so a fresh session can pick up the work without you explaining it again. If the spec states something you never said, that is a defect.
+
+Before publication, the agent uses `consult` to review the draft for contradictions, ambiguous requirements and gaps that would force an implementer to guess. The consultant receives the draft, the spec-writing instructions and relevant decision records or conversation excerpts. The agent checks the feedback against the original conversation and revises the document to faithfully record the agreed decisions.
 
 ## Seams before prose
 

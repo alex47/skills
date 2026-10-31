@@ -8,7 +8,7 @@ Two-axis review of the diff between `HEAD` and a fixed point the user supplies:
 - **Standards**: does the code conform to this repo's documented coding standards?
 - **Spec**: does the code faithfully implement the originating issue / spec?
 
-Both axes run as **parallel sub-agents** so they don't pollute each other's context, then this skill aggregates their findings. Start every sub-agent with a fresh context window.
+Both axes run as **parallel sub-agents** so they don't pollute each other's context. Start every sub-agent with a fresh context window. Each sub-agent uses `consult` for an independent assessment of its axis, compares findings, and returns one consolidated report. This skill then aggregates the two reports.
 
 The issue tracker should have been provided to you. If not, tell the user to run `/setup-matt-pocock-skills`.
 
@@ -58,6 +58,16 @@ Each smell reads *what it is* → *how to fix*; match it against the diff:
 ### 4. Spawn both sub-agents in parallel
 
 Issue both sub-agent calls together, in the foreground, and aggregate the reports they return.
+
+Include the following instructions **verbatim** in both sub-agent prompts:
+
+> Call the Skill tool with `consult` to get an independent review of your axis. Give the consultant the same review brief and relevant context, including the diff command, commit list, and standards or spec material provided to you.
+>
+> Start the consultant's review as a background task, then carry out your own review independently. After completing your review, collect the consultant's response, waiting for it to finish if necessary. Compare findings and use follow-up discussion when useful.
+>
+> Return one consolidated report for your axis.
+>
+> If consultation fails, report the failure and return your own review.
 
 **Standards sub-agent prompt** should include:
 
