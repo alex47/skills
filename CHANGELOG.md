@@ -1,13 +1,5 @@
 # mattpocock-skills
 
-## 1.3.3
-
-### Patch Changes
-
-- Keep Claude consultations in a live process when its session directory is blocked. Follow-ups retain conversation and tool context without changing the existing login, configuration or filesystem permissions.
-
-- Support streamed conversations across Bash, Windows PowerShell and PowerShell 7, including UTF-8 replies and concurrent consultations.
-
 ## 1.3.2
 
 ### Patch Changes

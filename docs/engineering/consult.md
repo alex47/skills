@@ -20,7 +20,7 @@ Type `/consult`, or the agent reaches for it automatically when you request a Cl
 
 The selected provider's CLI must be installed and authenticated. The runner uses Bash on Linux, macOS and WSL, or Windows PowerShell 5.1+ on Windows. On Windows, use the native CLI executable. Authentication in the host application alone may not authenticate its CLI. A selective skill installation must include `consult` alongside any skill that calls it.
 
-The consultant needs relevant requirements, repository access and evidence. It does not inherit your agent's conversation or loaded skills, so your agent includes the relevant task instructions, constraints and decisions in its brief. Your agent provides test results and makes project changes. The runner saves conversation metadata and diagnostics outside the project.
+The consultant needs relevant requirements, repository access and evidence. It does not inherit your agent's conversation or loaded skills, so your agent includes the relevant task instructions, constraints and decisions in its brief. Your agent provides test results and makes project changes. The CLI retains conversation metadata and diagnostics outside the project.
 
 The runner saves the consultant's reply in a plain-text file and prints its full path alongside the session path. It starts the CLI in the project's checkout root and uses that directory for follow-ups. Add `--session` with the session path to continue the conversation.
 
@@ -43,10 +43,6 @@ Its project tools enforce read-only access. It can suggest a patch, but your age
 **Can a consultant start another consultation?**
 
 No. Consultants must not invoke this skill or start other consultants.
-
-**Does Claude need extra filesystem permissions when called from Codex?**
-
-The runner handles a blocked Claude session directory by keeping Claude running with session saving disabled. Follow-ups reach the same process and retain its full conversation, including file-read results. Your existing login and settings stay in place. This mode needs no additional session-storage permissions or configuration changes. The host keeps the initial execution session open; ending that process ends the memory-only conversation.
 
 **What happens when they disagree?**
 

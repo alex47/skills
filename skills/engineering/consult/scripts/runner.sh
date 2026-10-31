@@ -9,11 +9,11 @@ uuid_ok() { [[ $1 =~ ^[[:xdigit:]]{8}-[[:xdigit:]]{4}-[[:xdigit:]]{4}-[[:xdigit:
 outside() { case "$1/" in "$repo/"*) fail 'Keep diagnostic files outside the project.';; esac; }
 absolute_file() { (cd "$(dirname "$1")" && printf '%s/%s\n' "$(pwd -P)" "$(basename "$1")"); }
 
-provider='' host='' repo='' session_file='' message='' model='' effort='' cli='' artifacts='' closing='' seconds=600
+provider='' host='' repo='' session_file='' message='' model='' effort='' cli='' artifacts='' seconds=600
 while [ "$#" -gt 0 ]; do
     option=$1
     case "$option" in
-        --host|--provider|--repo|--session|--message|--model|--effort|--cli|--artifacts|--timeout|--close)
+        --host|--provider|--repo|--session|--message|--model|--effort|--cli|--artifacts|--timeout)
             [[ "$#" -ge 2 && -n "$2" ]] || fail "$option needs a nonempty value."
             case "$2" in *$'\n'*|*$'\r'*) fail 'Options cannot contain line breaks.';; esac
             case "$option" in
@@ -21,23 +21,19 @@ while [ "$#" -gt 0 ]; do
                 --session) session_file=$2;; --message) message=$2;; --model) model=$2;;
                 --effort) effort=$2;; --cli) cli=$2;; --artifacts) artifacts=$2;;
                 --timeout) seconds=$2;;
-                --close) session_file=$2; closing=1;;
             esac
             shift 2;;
         --help|-h)
             printf '%s\n' 'Usage: bash runner.sh --message FILE [--session SESSION.txt]' \
-                'End a live conversation: bash runner.sh --close SESSION.txt' \
                 'Options: --provider claude|codex --repo DIR --timeout SECONDS' \
                 'Advanced: --host --model --effort --cli --artifacts'
             exit 0;;
         *) fail "Unknown option: $option";;
     esac
 done
-if [ -z "$closing" ]; then
-    [[ -n "$message" && -f "$message" ]] || fail '--message must name a text file.'
-    LC_ALL=C grep -q '[^[:space:]]' "$message" || fail 'Message is empty.'
-    message=$(absolute_file "$message")
-fi
+[[ -n "$message" && -f "$message" ]] || fail '--message must name a text file.'
+LC_ALL=C grep -q '[^[:space:]]' "$message" || fail 'Message is empty.'
+message=$(absolute_file "$message")
 case "$seconds" in ''|*[!0-9]*|0|0*) fail '--timeout must be a positive integer.';; esac
 case "$provider" in ''|claude|codex) ;; *) fail 'Unknown provider.';; esac
 case "$host" in ''|claude|codex) ;; *) fail 'Unknown host.';; esac
@@ -69,14 +65,6 @@ if [ -n "$session_file" ]; then
     case "$repo" in /*) ;; *) fail 'Invalid saved working directory.';; esac
     conversation=$(cd "$(dirname "$session_file")/.." && pwd -P)
     [ "$(basename "$session_file")" = session.txt ] || fail 'Invalid session path.'
-    if [ -n "$closing" ]; then
-        outside "$conversation"
-        if [ -f "$conversation/live-state.txt" ]; then
-            script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)
-            exec bash "$script_dir/claude-stream.sh" close "$conversation"
-        fi
-        exit 0
-    fi
 else
     if [ -z "$host" ]; then
         claude_host='' codex_host=''
@@ -100,19 +88,6 @@ if [ -z "$cli" ]; then cli=$(command -v "$provider") || fail "$provider is not o
 case "$cli" in /*) ;; *) fail '--cli must be an absolute executable path.';; esac
 [[ -x "$cli" && -f "$cli" ]] || fail 'CLI executable does not exist.'
 cli=$(absolute_file "$cli")
-stream=''
-if [ "$provider" = claude ]; then
-    if [ -n "$session_file" ]; then
-        [ ! -f "$conversation/live-state.txt" ] || stream=request
-    else
-        projects="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/projects"
-        case "$projects" in /*) ;; *) projects="$repo/$projects";; esac
-        if mkdir -p "$projects" 2>/dev/null && probe=$(mktemp -d "$projects/.consult-write-check.XXXXXX" 2>/dev/null); then
-            rmdir "$probe"
-        else stream=server
-        fi
-    fi
-fi
 if [ -z "$conversation" ]; then
     artifacts=${artifacts:-${TMPDIR:-/tmp}}
     ancestor=$artifacts suffix=
@@ -156,13 +131,11 @@ script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)
 cat "$script_dir/consultant.txt" > "$turn/prompt.txt"
 printf '\nHOST MESSAGE:\n' >> "$turn/prompt.txt"
 cat "$message" >> "$turn/prompt.txt"
-if [ "$stream" = request ]; then exec bash "$script_dir/claude-stream.sh" request "$conversation" "$turn" "$seconds"; fi
 args=()
 if [ "$provider" = claude ]; then
     args=(-p --output-format text --tools 'Read,Glob,Grep' --allowedTools 'Read,Glob,Grep' --permission-mode dontAsk)
     if [ -n "$session" ]; then args+=(--resume "$session"); else
         session=$(uuidgen 2>/dev/null || od -An -N16 -tx1 /dev/urandom | tr -d ' \n' | sed 's/^\(.\{8\}\)\(.\{4\}\).\(.\{3\}\).\(.\{3\}\)\(.\{12\}\)$/\1-\2-4\3-8\4-\5/')
-        session=$(printf '%s' "$session" | tr 'A-F' 'a-f')
         uuid_ok "$session" || fail 'Could not create a conversation ID.'
         args+=(--session-id "$session")
     fi
@@ -176,10 +149,6 @@ else
     [ -z "$effort" ] || args+=(-c "model_reasoning_effort=\"$effort\"")
     args+=(-)
 fi
-if [ "$stream" = server ]; then
-    printf '%s\n' consult-session-1 "$provider" "$session" "$repo" "$model" "$effort" "$cli" "$host" > "$conversation/live-state.txt"
-    exec bash "$script_dir/claude-stream.sh" server "$conversation" "$turn" "$seconds"
-fi
 printf '%s\n' "$cli" "${args[@]}" > "$turn/command.txt"
 # exec makes the monitored PID the CLI, while the subshell sets its working directory.
 (cd "$repo" && unset CLAUDECODE && export CONSULT_CONSULTANT=1 && exec "$cli" "${args[@]}") < "$turn/prompt.txt" > "$turn/stdout.txt" 2> "$turn/stderr.txt" &
@@ -188,7 +157,7 @@ child=$!
     sleep "$seconds"
     : > "$turn/timed-out"
     kill_tree "$child"
-) 2>/dev/null &
+) &
 timer=$!
 code=0
 wait "$child" || code=$?

@@ -3,11 +3,8 @@ $ErrorActionPreference = 'Stop'
 $utf8 = New-Object Text.UTF8Encoding($false)
 [Console]::OutputEncoding = $utf8
 [Console]::InputEncoding = $utf8
-function Save($Name, $Value) {
-    $file = [IO.File]::Open((Join-Path $env:FAKE_CAPTURE $Name), [IO.FileMode]::Create, [IO.FileAccess]::Write, [IO.FileShare]::ReadWrite)
-    try { $bytes = $utf8.GetBytes([string]$Value); $file.Write($bytes, 0, $bytes.Length) }
-    finally { $file.Dispose() }
-}
+function Save($Name, $Value) { [IO.File]::WriteAllText((Join-Path $env:FAKE_CAPTURE $Name), [string]$Value, $utf8) }
+Save 'prompt.txt' ([Console]::In.ReadToEnd())
 Save 'cwd.txt' ([Environment]::CurrentDirectory)
 Save 'args.txt' ($args -join "`n")
 Save 'consultant.txt' $env:CONSULT_CONSULTANT
@@ -26,48 +23,6 @@ for ($i = 0; $i -lt $args.Count; $i++) {
 }
 if (!$session) { $session = [guid]::NewGuid().ToString() }
 Save 'id.txt' $session
-if ($args -contains '--input-format') {
-    $previous = ''
-    $turns = @()
-    Save 'live-pid.txt' $PID
-    while ($null -ne ($line = [Console]::In.ReadLine())) {
-        try { $frame = ConvertFrom-Json $line }
-        catch {
-            $head = $line.Substring(0, [Math]::Min(32, $line.Length))
-            throw ('Invalid stream input prefix: ' + [BitConverter]::ToString($utf8.GetBytes($head)) + '. ' + $_.Exception.Message)
-        }
-        Save 'prompt.txt' $frame.message.content
-        $turns += $frame.message.content
-        Save 'turn-count.txt' $turns.Count
-        Save 'history.json' (ConvertTo-Json $turns -Compress)
-        $case = $env:FAKE_CASE
-        $control = Join-Path $env:FAKE_CAPTURE 'stream-control.txt'
-        if (Test-Path -LiteralPath $control) { $case = [IO.File]::ReadAllText($control).Trim() }
-        switch ($case) {
-            'exit' { [Console]::Error.WriteLine('provider failure'); exit 7 }
-            'sleep' { Start-Sleep -Seconds 30 }
-            'malformed' { [Console]::Out.WriteLine('not an event'); continue }
-            'no-result' { exit 0 }
-        }
-        $body = $env:FAKE_REPLY
-        if (!$body) { $body = 'Independent finding' }
-        if ($case -eq 'memory') {
-            if (!$previous) { $previous = 'MEMORY_' + [guid]::NewGuid().ToString() }
-            $body = $previous
-        }
-        if ($case -eq 'empty') { $body = '  ' }
-        $responseId = $session
-        if ($case -eq 'wrong-id') { $responseId = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa' }
-        $event = @{ type = 'result'; is_error = ($case -eq 'error-event'); result = $body; session_id = $responseId }
-        $encoded = ConvertTo-Json $event -Compress
-        if ($case -eq 'escaped') {
-            $encoded = [regex]::Replace($encoded, '[^\u0000-\u007f]', { param($match) '\u{0:x4}' -f [int][char]$match.Value })
-        }
-        [Console]::Out.WriteLine($encoded)
-    }
-    exit 0
-}
-Save 'prompt.txt' ([Console]::In.ReadToEnd())
 switch ($env:FAKE_CASE) {
     'exit' { [Console]::Error.WriteLine('provider failure'); exit 7 }
     'throw' { throw 'fixture exception' }
