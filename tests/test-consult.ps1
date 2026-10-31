@@ -13,6 +13,7 @@ if ($Runner -eq 'Bash') {
 $repo = Join-Path $temp ('project with spaces ' + [char]0x03bb)
 $capture = Join-Path $temp 'capture'
 $artifacts = Join-Path $temp 'artifacts'
+$claudeConfig = Join-Path $temp 'Claude config'
 $message = Join-Path $temp 'message.txt'
 $shell = [Diagnostics.Process]::GetCurrentProcess().MainModule.FileName
 $script = Join-Path $root 'skills/engineering/consult/scripts/runner.ps1'
@@ -32,7 +33,7 @@ function Assert($Condition, $Because) { if (!$Condition) { throw $Because } }
 function Quote([string]$Value) {
     '"' + [regex]::Replace([regex]::Replace($Value, '(\\*)"', '$1$1\"'), '(\\+)$', '$1$1') + '"'
 }
-function Start-Call($Arguments, $Directory = $repo) {
+function Start-Call($Arguments, $Directory = $repo, $Live = $false) {
     $start = New-Object Diagnostics.ProcessStartInfo
     $start.FileName = $shell
     $start.Arguments = (($prefix + $Arguments | ForEach-Object { Quote $_ }) -join ' ')
@@ -45,6 +46,7 @@ function Start-Call($Arguments, $Directory = $repo) {
     $process = New-Object Diagnostics.Process
     $process.StartInfo = $start
     [void]$process.Start()
+    if ($Live) { return @{ Process = $process; Out = $process.StandardOutput.ReadLineAsync(); Err = $process.StandardError.ReadToEndAsync() } }
     return @{ Process = $process; Out = $process.StandardOutput.ReadToEndAsync(); Err = $process.StandardError.ReadToEndAsync() }
 }
 function Finish-Call($Call) {
@@ -87,6 +89,27 @@ function Case($Name, [scriptblock]$Body) {
     $script:count++
     [Console]::Out.WriteLine('ok ' + $script:count + ' - ' + $Name)
 }
+function Start-Live($Extra = @()) {
+    $arguments = @('--provider', 'claude', '--repo', $repo, '--message', $message, '--cli', $fixture, '--artifacts', $artifacts) + $Extra
+    $call = Start-Call $arguments $repo $true
+    try {
+        Assert ($call.Out.Wait(15000)) 'Live conversation did not report its first reply.'
+        $firstLine = $call.Out.GetAwaiter().GetResult()
+        if ($null -eq $firstLine) { throw ('Live startup failed: ' + $call.Err.GetAwaiter().GetResult()) }
+        $secondLine = $call.Process.StandardOutput.ReadLineAsync()
+        Assert ($secondLine.Wait(15000)) 'Live conversation did not report its session.'
+        $paths = Success @{ Code = 0; Out = $firstLine + "`n" + $secondLine.GetAwaiter().GetResult() + "`n"; Err = '' }
+        return @{ Call = $call; Paths = $paths }
+    } catch { $call.Process.Kill(); $call.Process.Dispose(); throw }
+}
+function Stop-Live($Live) {
+    $closed = Invoke-Call @('--close', $Live.Paths.Session)
+    try {
+        Assert ($closed.Code -eq 0 -and $closed.Out -eq '') ('Live close failed: ' + $closed.Err)
+        if (!$Live.Call.Process.WaitForExit(10000)) { $Live.Call.Process.Kill(); throw 'Live conversation did not stop.' }
+        $Live.ExitCode = $Live.Call.Process.ExitCode
+    } finally { $Live.Call.Process.Dispose() }
+}
 
 try {
     foreach ($path in @($repo, $capture, $artifacts)) { [void][IO.Directory]::CreateDirectory($path) }
@@ -98,6 +121,8 @@ try {
     $env:CODEX_THREAD_ID = ''
     $env:CODEX_SESSION_ID = ''
     $env:CONSULT_CONSULTANT = ''
+    $env:CLAUDE_CONFIG_DIR = $claudeConfig
+    $env:FAKE_PWSH = [Diagnostics.Process]::GetCurrentProcess().MainModule.FileName
     foreach ($provider in @('claude', 'codex')) {
         Case "$provider starts and resumes the exact conversation in the project directory" {
             $chosenModel = 'chosen "model" $() \ end'
@@ -163,6 +188,97 @@ try {
             Assert ((Test-Path -LiteralPath (Join-Path $diagnostics 'stderr.txt'))) 'Timeout discarded stderr diagnostics.'
         }
     }
+    $blocked = Join-Path $temp 'blocked-profile'
+    Save $blocked 'not a directory'
+    $env:CLAUDE_CONFIG_DIR = $blocked
+    Case 'Claude keeps one native process and context when session storage is blocked' {
+        $env:FAKE_CASE = 'memory'
+        $chosenModel = 'chosen "model" $() \ end'
+        $live = Start-Live @('--model', $chosenModel, '--effort', 'high')
+        try {
+            $first = $live.Paths
+            Save $message 'Repeat your previous reply exactly.'
+            $second = Success (Continue-Session $first.Session)
+            Assert ((Read $second.Reply) -eq (Read $first.Reply)) 'Live follow-up lost its conversation memory.'
+            Assert ((Read (Join-Path $capture 'turn-count.txt')) -eq '2') 'Follow-up started a new CLI process.'
+            Assert ($first.Fields[2] -eq $second.Fields[2]) 'Live follow-up changed the native session ID.'
+            Assert ($second.Fields[4] -ceq $chosenModel -and $second.Fields[5] -ceq 'high') 'Live follow-up lost its model or effort.'
+            $cliArgs = Read (Join-Path $capture 'args.txt')
+            Assert ($cliArgs.Contains('--no-session-persistence') -and $cliArgs.Contains('stream-json')) 'Live mode depended on protected session storage.'
+            Assert ($cliArgs.Contains('Read,Glob,Grep') -and $cliArgs.Contains('dontAsk') -and !$cliArgs.Contains('--safe-mode')) 'Live Claude lost its read-only tools or settings policy.'
+            Assert ((Read $blocked) -eq 'not a directory') 'Runner changed the original profile.'
+            Failure (Continue-Session $first.Session)
+        } finally { Stop-Live $live }
+        Assert ($live.ExitCode -eq 0) 'Closing a healthy live conversation failed.'
+    }
+    Case 'parallel live consultations retain separate native contexts' {
+        $env:FAKE_CASE = 'memory'
+        $first = Start-Live
+        $second = $null
+        try {
+            $second = Start-Live
+            Assert ($first.Paths.Fields[2] -ne $second.Paths.Fields[2]) 'Live conversations shared a native ID.'
+            $a = Success (Continue-Session $first.Paths.Session)
+            $b = Success (Continue-Session $second.Paths.Session)
+            Assert ((Read $a.Reply) -eq (Read $first.Paths.Reply)) 'First live context was mixed with the second.'
+            Assert ((Read $b.Reply) -eq (Read $second.Paths.Reply)) 'Second live context was mixed with the first.'
+            Assert ((Read $a.Reply) -ne (Read $b.Reply)) 'Parallel live contexts were not independent.'
+        } finally {
+            Stop-Live $first
+            if ($second) { Stop-Live $second }
+        }
+    }
+    Case 'live conversations allow only one active follow-up' {
+        $live = Start-Live
+        try {
+            Save (Join-Path $capture 'stream-control.txt') 'sleep'
+            $running = Start-Call @('--session', $live.Paths.Session, '--message', $message, '--timeout', '2')
+            $lock = Join-Path (Split-Path (Split-Path $live.Paths.Session)) 'lock'
+            $watch = [Diagnostics.Stopwatch]::StartNew()
+            while (!(Test-Path -LiteralPath $lock) -and $watch.Elapsed.TotalSeconds -lt 8) { Start-Sleep -Milliseconds 30 }
+            Assert (Test-Path -LiteralPath $lock) 'Live follow-up did not acquire its lock.'
+            Failure (Continue-Session $live.Paths.Session)
+            Failure (Finish-Call $running)
+        } finally {
+            Remove-Item -LiteralPath (Join-Path $capture 'stream-control.txt') -Force -ErrorAction SilentlyContinue
+            Stop-Live $live
+        }
+    }
+    Case 'live Claude preserves UTF-8, escaped Unicode and literal JSON-looking text' {
+        $env:FAKE_CASE = 'escaped'
+        $env:FAKE_REPLY = "Quotes: `"yes`", backslash \, newline`n$([char]0x03bb)$([char]0x65e5)$([char]::ConvertFromUtf32(0x1f680))`n{`"type`":`"result`"}`n"
+        Save $message $env:FAKE_REPLY
+        $live = Start-Live
+        try {
+            Assert ((Read $live.Paths.Reply) -ceq $env:FAKE_REPLY) 'Live reply decoding changed the text.'
+            Assert ((Read (Join-Path $capture 'prompt.txt')).EndsWith($env:FAKE_REPLY)) 'Live prompt encoding changed the message.'
+        } finally { Stop-Live $live }
+    }
+    foreach ($problem in @('exit', 'malformed', 'empty', 'wrong-id', 'error-event', 'no-result', 'sleep')) {
+        Case "live Claude reports $problem and invalidates the previous turn" {
+            $live = Start-Live
+            try {
+                Save (Join-Path $capture 'stream-control.txt') $problem
+                $result = Continue-Session $live.Paths.Session @('--timeout', '1')
+                Failure $result
+                Failure (Continue-Session $live.Paths.Session)
+                Assert ((Read $live.Paths.Reply) -eq 'Independent finding') 'Live failure overwrote an earlier reply.'
+            } finally {
+                Remove-Item -LiteralPath (Join-Path $capture 'stream-control.txt') -Force -ErrorAction SilentlyContinue
+                Stop-Live $live
+            }
+        }
+    }
+    Case 'an ended live conversation fails without silently restarting' {
+        $live = Start-Live
+        $savedSession = $live.Paths.Session
+        Stop-Live $live
+        $result = Continue-Session $savedSession
+        Failure $result
+        Assert ($result.Err.Contains('live Claude conversation has ended')) 'Ended conversation was silently replaced.'
+    }
+    $env:CLAUDE_CONFIG_DIR = $claudeConfig
+    Save $message 'Assess the same task independently.'
     Case 'CLI exceptions appear in unexpected-failure diagnostics' {
         $env:FAKE_CASE = 'throw'
         $result = Fresh 'codex'

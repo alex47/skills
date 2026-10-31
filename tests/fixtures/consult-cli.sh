@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 # An offline CLI double. All state lives in the test's temporary directory.
 set -eu
+for argument in "$@"; do
+    if [ "$argument" = --input-format ]; then
+        exec "$FAKE_PWSH" -NoProfile -NonInteractive -File "$(dirname "$0")/consult-cli.ps1" "$@"
+    fi
+done
 cat > "$FAKE_CAPTURE/prompt.txt"
 printf '%s\n' "$PWD" > "$FAKE_CAPTURE/cwd.txt"
 printf '%s\n' "$@" > "$FAKE_CAPTURE/args.txt"

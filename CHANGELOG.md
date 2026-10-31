@@ -1,5 +1,11 @@
 # mattpocock-skills
 
+## 1.3.3-consult.1
+
+### Patch Changes
+
+- Keep Claude consultations in a live process when its session directory is blocked. Follow-ups retain conversation and tool context without changing the existing login, configuration or filesystem permissions.
+
 ## 1.3.2
 
 ### Patch Changes

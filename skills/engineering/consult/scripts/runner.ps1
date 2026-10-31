@@ -35,7 +35,7 @@ function Stop-Tree($Process) {
         $Process.Kill()
     }
 }
-function Run-Process($Executable, $Arguments, $Directory, [string]$InputText, [int]$Timeout, $Diagnostics = '') {
+function Run-Process($Executable, $Arguments, $Directory, [string]$InputText, [int]$Timeout, $Diagnostics = '', $Streaming = $false) {
     $start = New-Object Diagnostics.ProcessStartInfo
     if ([IO.Path]::GetExtension($Executable) -eq '.ps1') {
         # Array splatting preserves CLI flags as literal arguments in PowerShell 5.1.
@@ -61,6 +61,7 @@ function Run-Process($Executable, $Arguments, $Directory, [string]$InputText, [i
     $start.EnvironmentVariables.Remove('CLAUDECODE')
     $process = New-Object Diagnostics.Process
     $process.StartInfo = $start
+    if ($Streaming) { [void]$process.Start(); return $process }
     $started = $false
     try {
         [void]$process.Start()
@@ -102,11 +103,12 @@ try {
         $option = [string]$args[$index]
         if ($option -in @('--help', '-h')) {
             [Console]::Out.WriteLine('Usage: runner.ps1 --message FILE [--session SESSION.txt]')
+            [Console]::Out.WriteLine('End a live conversation: runner.ps1 --close SESSION.txt')
             [Console]::Out.WriteLine('Options: --provider claude|codex --repo DIR --timeout SECONDS')
             [Console]::Out.WriteLine('Advanced: --host --model --effort --cli --artifacts')
             exit 0
         }
-        if ($option -notin @('--host', '--provider', '--repo', '--session', '--message', '--model', '--effort', '--cli', '--artifacts', '--timeout')) {
+        if ($option -notin @('--host', '--provider', '--repo', '--session', '--message', '--model', '--effort', '--cli', '--artifacts', '--timeout', '--close')) {
             throw "Unknown option: $option"
         }
         $index++
@@ -115,9 +117,12 @@ try {
         if ($value.Contains("`n") -or $value.Contains("`r")) { throw 'Options cannot contain line breaks.' }
         $settings[$option.Substring(2)] = $value
     }
-    if (!$settings.message -or !(Test-Path -LiteralPath $settings.message -PathType Leaf)) { throw '--message must name a text file.' }
-    $messageText = Read-Text (Full-Path $settings.message)
-    if ([string]::IsNullOrWhiteSpace($messageText)) { throw 'Message is empty.' }
+    if ($settings.close) { $settings.session = $settings.close }
+    else {
+        if (!$settings.message -or !(Test-Path -LiteralPath $settings.message -PathType Leaf)) { throw '--message must name a text file.' }
+        $messageText = Read-Text (Full-Path $settings.message)
+        if ([string]::IsNullOrWhiteSpace($messageText)) { throw 'Message is empty.' }
+    }
     $timeout = 600
     if ($settings.ContainsKey('timeout') -and (![int]::TryParse($settings.timeout, [ref]$timeout) -or $timeout -lt 1 -or $timeout -gt 2147483)) {
         throw '--timeout must be a positive integer below 2147484.'
@@ -145,6 +150,15 @@ try {
         $session = $fields[2]
         if ([IO.Path]::GetFileName($sessionFile) -cne 'session.txt') { throw 'Invalid session path.' }
         $conversation = [IO.Directory]::GetParent([IO.Path]::GetDirectoryName($sessionFile)).FullName
+        if ($settings.close) {
+            $repo = Full-Path $settings.repo
+            Check-Outside $conversation
+            if (Test-Path -LiteralPath (Join-Path $conversation 'live-state.txt')) {
+                . (Join-Path $PSScriptRoot 'claude-stream.ps1')
+                Close-ClaudeStream $conversation
+            }
+            exit 0
+        }
     } else {
         if (!$settings.host) {
             $claudeHost = $env:CLAUDECODE -in @('1', 'true')
@@ -178,6 +192,19 @@ try {
     if ([IO.Path]::GetExtension($settings.cli) -in @('.cmd', '.bat')) {
         throw 'Expected a native CLI executable. Put it on PATH or select it with --cli.'
     }
+    $stream = $false
+    if ($settings.provider -eq 'claude' -and !$settings.session) {
+        $config = $env:CLAUDE_CONFIG_DIR
+        if (!$config) { $config = Join-Path ([Environment]::GetFolderPath('UserProfile')) '.claude' }
+        if (![IO.Path]::IsPathRooted($config)) { $config = Join-Path $repo $config }
+        $projects = Join-Path $config 'projects'
+        try {
+            [void][IO.Directory]::CreateDirectory($projects)
+            $probe = Join-Path $projects ('.consult-write-check.' + [guid]::NewGuid().ToString('N'))
+            [void][IO.Directory]::CreateDirectory($probe)
+            [IO.Directory]::Delete($probe)
+        } catch { $stream = $true }
+    }
     if (!$conversation) {
         $parent = [IO.Path]::GetTempPath()
         if ($settings.artifacts) { $parent = Full-Path $settings.artifacts }
@@ -200,9 +227,18 @@ try {
     $instructions = Read-Text (Join-Path $PSScriptRoot 'consultant.txt')
     $prompt = $instructions + "`nHOST MESSAGE:`n" + $messageText
     Write-Text (Join-Path $turn 'prompt.txt') $prompt
+    $liveState = Join-Path $conversation 'live-state.txt'
+    if ($settings.session -and (Test-Path -LiteralPath $liveState)) {
+        . (Join-Path $PSScriptRoot 'claude-stream.ps1')
+        Request-ClaudeStream $conversation $turn $timeout
+        exit 0
+    }
     $reply = Join-Path $turn 'reply.txt'
     if ($settings.provider -eq 'claude') {
         $cliArgs = @('-p', '--output-format', 'text', '--tools', 'Read,Glob,Grep', '--allowedTools', 'Read,Glob,Grep', '--permission-mode', 'dontAsk')
+        if ($stream) {
+            $cliArgs = @('-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose', '--no-session-persistence', '--tools', 'Read,Glob,Grep', '--allowedTools', 'Read,Glob,Grep', '--permission-mode', 'dontAsk')
+        }
         if ($session) { $cliArgs += @('--resume', $session) }
         else { $session = [guid]::NewGuid().ToString(); $cliArgs += @('--session-id', $session) }
         if ($settings.model) { $cliArgs += @('--model', $settings.model) }
@@ -214,6 +250,17 @@ try {
         if ($settings.model) { $cliArgs += @('-m', $settings.model) }
         if ($settings.effort) { $cliArgs += @('-c', ('model_reasoning_effort="' + $settings.effort + '"')) }
         $cliArgs += '-'
+    }
+    if ($stream) {
+        $record = @('consult-session-1', $settings.provider, $session, $repo, [string]$settings.model, [string]$settings.effort, $settings.cli, [string]$settings.host)
+        Write-Text $liveState (($record -join "`n") + "`n")
+        $lockStream.Dispose()
+        [IO.File]::Delete($lockPath)
+        $lockStream = $null
+        $lockPath = $null
+        . (Join-Path $PSScriptRoot 'claude-stream.ps1')
+        Serve-ClaudeStream $conversation $turn $timeout $settings $cliArgs
+        exit 0
     }
     Write-Text (Join-Path $turn 'command.txt') ((@($settings.cli) + $cliArgs) -join "`n")
     $result = Run-Process $settings.cli $cliArgs $repo $prompt $timeout $turn

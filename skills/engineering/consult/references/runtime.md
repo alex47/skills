@@ -1,6 +1,8 @@
 # Runtime
 
-For long calls, run the command in the background so you can continue your own work while it runs. Run only one turn at a time per conversation.
+Use nonblocking execution so you can continue your own work while the consultant runs. Read the reply once both output paths appear. Run only one turn at a time per conversation.
+
+If Claude's session directory is not writable, the runner keeps its conversation in a live process. Keep the initial execution session open for follow-ups. When finished, run the runner with `--close "SESSION"`. Follow-ups still use `--session`.
 
 ## Linux, macOS and WSL
 
@@ -41,7 +43,7 @@ From the target project, run in PowerShell:
 
 ## Results
 
-When a call finishes successfully, the runner prints two absolute paths to stdout:
+After a successful turn, the runner prints two absolute paths to stdout:
 
 - **Reply:** absolute path to the plain-text file containing the consultant’s reply.
 - **Session:** absolute path to the session file. Pass this to `--session` to continue the same conversation.
