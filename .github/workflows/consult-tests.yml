@@ -1,0 +1,43 @@
+name: Consult runner tests
+
+on:
+  push:
+    paths:
+      - skills/engineering/consult/**
+      - tests/test-consult.ps1
+      - tests/fixtures/consult-cli.*
+      - .github/workflows/consult-tests.yml
+  pull_request:
+    paths:
+      - skills/engineering/consult/**
+      - tests/test-consult.ps1
+      - tests/fixtures/consult-cli.*
+      - .github/workflows/consult-tests.yml
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 5
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            runner: Bash
+            shell: pwsh
+          - os: macos-latest
+            runner: Bash
+            shell: pwsh
+          - os: windows-latest
+            runner: PowerShell
+            shell: powershell
+          - os: windows-latest
+            runner: PowerShell
+            shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run offline runner tests
+        shell: ${{ matrix.shell }}
+        run: ./tests/test-consult.ps1 -Runner ${{ matrix.runner }}

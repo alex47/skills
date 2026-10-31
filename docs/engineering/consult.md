@@ -18,11 +18,11 @@ Type `/consult`, or the agent reaches for it automatically when you request a Cl
 
 ## Prerequisites
 
-The selected provider's CLI must be installed and authenticated, and Python 3.10 or newer must be available. Authentication in the host application alone may not authenticate its CLI. A selective skill installation must include `consult` alongside any skill that calls it.
+The selected provider's CLI must be installed and authenticated. The runner uses Bash on Linux, macOS and WSL, or Windows PowerShell 5.1+ on Windows. On Windows, use the native CLI executable. Authentication in the host application alone may not authenticate its CLI. A selective skill installation must include `consult` alongside any skill that calls it.
 
 The consultant needs relevant requirements, repository access and evidence. It does not inherit your agent's conversation or loaded skills, so your agent includes the relevant task instructions, constraints and decisions in its brief. Your agent provides test results and makes project changes. The CLI retains conversation metadata and diagnostics outside the project.
 
-The runner accepts a plain-text prompt and returns a plain-text reply, also saved to a file. It uses the current project and infers the caller from its session environment. If detection is ambiguous, an explicit provider choice is required. Supplying `--resume` with the saved session path continues the conversation; omitting it starts a new one.
+The runner saves the reply and a session record in separate text files and prints their full paths. It starts the CLI in the project's checkout root and uses that directory for follow-ups. Add `--resume` with the session path to continue the conversation.
 
 ## A second opinion with continuity
 
@@ -39,6 +39,10 @@ Yes. Name the provider, such as "consult Claude about this approach". The runner
 **Can the consultant change my files?**
 
 Its project tools enforce read-only access. It can suggest a patch, but your agent decides whether to apply it. The CLI itself can write session records outside the project.
+
+**Can a consultant start another consultation?**
+
+No. Consultants must not invoke this skill or start other consultants.
 
 **What happens when they disagree?**
 
