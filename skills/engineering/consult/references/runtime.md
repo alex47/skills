@@ -1,51 +1,56 @@
 # Runtime
 
-Requires an installed, authenticated Claude or Codex CLI. Use Bash on Linux, macOS or WSL, or Windows PowerShell 5.1+ on Windows.
+For long calls, run the command in the background so you can continue your own work while it runs. Run only one turn at a time per conversation.
 
-Replace `RUNNER` with the absolute path to `scripts/runner.sh` or `scripts/runner.ps1` in the installed skill. Keep message and diagnostic files outside the target project.
-
-## Send a message
-
-Create a prompt file with `mktemp /tmp/consult-prompt.XXXXXX` in Bash, or `[IO.Path]::GetTempFileName()` in PowerShell. Write your message as UTF-8 text to that file and use its full path as `PROMPT`.
+## Linux, macOS and WSL
 
 From the target project, run:
 
 ```bash
-bash "RUNNER" --message "PROMPT"
+# Start a conversation
+bash "RUNNER" --message "MESSAGE"
+
+# Continue a conversation
+bash "RUNNER" --message "MESSAGE" --session "SESSION"
 ```
 
-On Windows, use:
+- `RUNNER`: absolute path to `scripts/runner.sh` inside the `consult` skill directory.
+- `MESSAGE`: absolute path to the text file containing your message to the consultant. Create it with `mktemp /tmp/consult-message.XXXXXX` and write the message as UTF-8 text.
+- `SESSION`: absolute path to the session file for the conversation you want to continue.
+
+## Windows
+
+From the target project, run in PowerShell:
 
 ```powershell
-& "RUNNER" --message "PROMPT"
+# Start a conversation
+& "RUNNER" --message "MESSAGE"
+
+# Continue a conversation
+& "RUNNER" --message "MESSAGE" --session "SESSION"
 ```
 
-To continue, add `--resume "SESSION.txt"` using the session path printed by the latest successful call. Without `--resume`, a new conversation starts. Run only one turn at a time per conversation. An invalid resume record causes an error, not a new conversation.
+- `RUNNER`: absolute path to `scripts/runner.ps1` inside the `consult` skill directory.
+- `MESSAGE`: absolute path to the text file containing your message to the consultant. Create it with `[IO.Path]::GetTempFileName()` and write the message as UTF-8 text.
+- `SESSION`: absolute path to the session file for the conversation you want to continue.
 
-## Options
+## Optional arguments
 
-The caller is inferred from its session environment; the consultant defaults to the other provider. If identification is ambiguous, specify `--provider` rather than guessing.
+- `--provider claude|codex`: choose the consultant’s provider. By default, Claude consults Codex and Codex consults Claude.
+- `--timeout SECONDS`: set the execution timeout, which defaults to 600 seconds per turn.
 
-- `--provider claude|codex`: select the consultant directly, including the caller's provider.
-- `--repo PATH`: override the project directory. Git projects use their checkout root; follow-ups keep the same working directory.
-- `--timeout SECONDS`: change the execution timeout, which defaults to 600 seconds per turn.
+## Results
 
-Use nonblocking execution for long calls.
+When a call finishes successfully, the runner prints two absolute paths to stdout:
 
-## Reply and failures
-
-Prompts, replies and session records are plain-text files. When a call finishes successfully, stdout contains only two full file paths:
-
-- **Reply file:** contains the consultant's response.
-- **Session file:** pass this path to `--resume` for follow-ups. You do not need to read its contents.
+- **Reply:** absolute path to the plain-text file containing the consultant’s reply.
+- **Session:** absolute path to the session file. Pass this to `--session` to continue the same conversation.
 
 Example output:
 
 ```text
 Reply: /tmp/consult.a1b2c3/turn.d4e5f6/reply.txt
-Resume: /tmp/consult.a1b2c3/turn.d4e5f6/session.txt
+Session: /tmp/consult.a1b2c3/turn.d4e5f6/session.txt
 ```
 
-Each call uses separate output files in the system temporary directory.
-
-Exit code zero means success. On a nonzero exit, report the error from stderr. Do not attempt repairs, retries or a fresh conversation without instructions. Do not resume an older session after a failed or interrupted turn, weaken read-only restrictions, or silently switch providers or models.
+On failure, report the error from stderr. Do not retry or start a new conversation without instructions.

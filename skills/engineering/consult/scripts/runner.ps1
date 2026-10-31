@@ -81,8 +81,8 @@ function Run-Process($Executable, $Arguments, $Directory, [string]$InputText, [i
         if ($started) { Stop-Tree $process }
         if ($started -and $Diagnostics) {
             [void]$process.WaitForExit(5000)
-            if ($stdout.IsCompleted) { Write-Text (Join-Path $Diagnostics 'stdout.txt') $stdout.GetAwaiter().GetResult() }
-            if ($stderr.IsCompleted) { Write-Text (Join-Path $Diagnostics 'stderr.txt') $stderr.GetAwaiter().GetResult() }
+            if ($stdout.Wait(5000)) { Write-Text (Join-Path $Diagnostics 'stdout.txt') $stdout.GetAwaiter().GetResult() }
+            if ($stderr.Wait(5000)) { Write-Text (Join-Path $Diagnostics 'stderr.txt') $stderr.GetAwaiter().GetResult() }
         }
         $process.Dispose()
     }
@@ -97,12 +97,12 @@ try {
     for ($index = 0; $index -lt $args.Count; $index++) {
         $option = [string]$args[$index]
         if ($option -in @('--help', '-h')) {
-            [Console]::Out.WriteLine('Usage: runner.ps1 --message FILE [--resume SESSION.txt]')
+            [Console]::Out.WriteLine('Usage: runner.ps1 --message FILE [--session SESSION.txt]')
             [Console]::Out.WriteLine('Options: --provider claude|codex --repo DIR --timeout SECONDS')
             [Console]::Out.WriteLine('Advanced: --host --model --effort --cli --artifacts')
             exit 0
         }
-        if ($option -notin @('--host', '--provider', '--repo', '--resume', '--message', '--model', '--effort', '--cli', '--artifacts', '--timeout')) {
+        if ($option -notin @('--host', '--provider', '--repo', '--session', '--message', '--model', '--effort', '--cli', '--artifacts', '--timeout')) {
             throw "Unknown option: $option"
         }
         $index++
@@ -124,10 +124,10 @@ try {
     if ($settings.effort -and $settings.effort -cnotin @('low', 'medium', 'high', 'xhigh', 'max')) { throw 'Unknown effort.' }
     $session = ''
     $conversation = ''
-    if ($settings.resume) {
+    if ($settings.session) {
         if ($settings.artifacts) { throw '--artifacts is only valid for a new conversation.' }
-        $resume = Full-Path $settings.resume
-        $fields = [IO.File]::ReadAllLines($resume, $utf8)
+        $sessionFile = Full-Path $settings.session
+        $fields = [IO.File]::ReadAllLines($sessionFile, $utf8)
         if ($fields.Count -ne 8 -or $fields[0] -cne 'consult-session-1' -or $fields[1] -cnotin @('claude', 'codex') -or !(Valid-Id $fields[2])) {
             throw 'Invalid session file.'
         }
@@ -139,8 +139,8 @@ try {
         $settings.repo = $fields[3]
         if (![IO.Path]::IsPathRooted($settings.repo)) { throw 'Invalid saved working directory.' }
         $session = $fields[2]
-        if ([IO.Path]::GetFileName($resume) -cne 'session.txt') { throw 'Invalid session path.' }
-        $conversation = [IO.Directory]::GetParent([IO.Path]::GetDirectoryName($resume)).FullName
+        if ([IO.Path]::GetFileName($sessionFile) -cne 'session.txt') { throw 'Invalid session path.' }
+        $conversation = [IO.Directory]::GetParent([IO.Path]::GetDirectoryName($sessionFile)).FullName
     } else {
         if (!$settings.host) {
             $claudeHost = $env:CLAUDECODE -in @('1', 'true')
@@ -186,7 +186,7 @@ try {
     try { $lockStream = [IO.File]::Open($lockPath, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None) }
     catch { $lockPath = $null; throw 'Conversation has an active or interrupted turn.' }
     $latest = Join-Path $conversation 'latest.txt'
-    if ($settings.resume -and (!(Test-Path -LiteralPath $latest) -or (Read-Text $latest).TrimEnd("`r", "`n") -cne $resume)) {
+    if ($settings.session -and (!(Test-Path -LiteralPath $latest) -or (Read-Text $latest).TrimEnd("`r", "`n") -cne $sessionFile)) {
         throw 'Session is stale; use only the latest successful turn.'
     }
     $turn = Join-Path $conversation ('turn.' + [guid]::NewGuid().ToString('N'))
@@ -228,7 +228,7 @@ try {
     $record = @('consult-session-1', $settings.provider, $session, $repo, [string]$settings.model, [string]$settings.effort, $settings.cli, [string]$settings.host)
     Write-Text $sessionPath (($record -join "`n") + "`n")
     [Console]::Out.WriteLine('Reply: ' + $reply)
-    [Console]::Out.WriteLine('Resume: ' + $sessionPath)
+    [Console]::Out.WriteLine('Session: ' + $sessionPath)
     exit 0
 } catch {
     [Console]::Error.WriteLine('consult: ' + $_.Exception.Message)

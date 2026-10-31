@@ -57,14 +57,14 @@ function Invoke-Call($Arguments, $Directory = $repo) { Finish-Call (Start-Call $
 function Fresh($Provider = 'claude', $Extra = @()) {
     Invoke-Call (@('--provider', $Provider, '--repo', $repo, '--message', $message, '--cli', $fixture, '--artifacts', $artifacts) + $Extra)
 }
-function Resume-Call($Session, $Extra = @()) { Invoke-Call (@('--resume', $Session, '--message', $message) + $Extra) }
+function Continue-Session($Session, $Extra = @()) { Invoke-Call (@('--session', $Session, '--message', $message) + $Extra) }
 function Success($Result) {
     Assert ($Result.Code -eq 0) ("Failed: " + $Result.Err)
     Assert ($Result.Err -eq '') ('Unexpected stderr: ' + $Result.Err)
     $lines = $Result.Out.TrimEnd("`r", "`n") -split '\r?\n'
-    Assert ($lines.Count -eq 2 -and $lines[0].StartsWith('Reply: ') -and $lines[1].StartsWith('Resume: ')) 'Success must print only two labeled paths.'
+    Assert ($lines.Count -eq 2 -and $lines[0].StartsWith('Reply: ') -and $lines[1].StartsWith('Session: ')) 'Success must print only two labeled paths.'
     $reply = $lines[0].Substring(7)
-    $session = $lines[1].Substring(8)
+    $session = $lines[1].Substring(9)
     Assert ([IO.Path]::IsPathRooted($reply) -and [IO.Path]::IsPathRooted($session)) 'Output paths must be absolute.'
     Assert ((Test-Path -LiteralPath $reply) -and (Test-Path -LiteralPath $session)) 'Output files are missing.'
     return @{ Reply = $reply; Session = $session; Fields = [IO.File]::ReadAllLines($session, $utf8) }
@@ -106,7 +106,7 @@ try {
             Assert ($prompt.Contains('You are the consultant') -and $prompt.Contains('Do not delegate, invoke the consult skill') -and $prompt.Contains('Assess the same task')) 'Consultant role or task missing.'
             Assert ((Read (Join-Path $capture 'consultant.txt')).Trim() -eq '1') 'Consultant process marker missing.'
             Save $message 'Clarify the earlier finding.'
-            $second = Success (Resume-Call $first.Session)
+            $second = Success (Continue-Session $first.Session)
             Assert ($second.Fields[2] -eq $first.Fields[2]) 'Follow-up changed conversation ID.'
             Assert ($second.Fields[1] -eq $first.Fields[1] -and $second.Fields[3] -eq $repo) 'Follow-up changed provider or project.'
             Assert ($second.Fields[4] -eq $chosenModel -and $second.Fields[5] -eq 'high') 'Follow-up lost model overrides.'
@@ -116,25 +116,27 @@ try {
             Assert (($cliArgs -split '\r?\n') -ccontains $chosenModel) 'CLI argument quoting changed the model value.'
             if ($provider -eq 'claude') {
                 Assert ($cliArgs.Contains('Read,Glob,Grep') -and $cliArgs.Contains('dontAsk') -and !$cliArgs.Contains('--safe-mode')) 'Claude restrictions or customization policy wrong.'
+                Assert (($cliArgs -split '\r?\n') -ccontains '--resume') 'Claude continuation option missing.'
             } else {
                 Assert ($cliArgs.Contains('sandbox_mode="read-only"') -and $cliArgs.Contains('approval_policy="never"') -and $cliArgs.Contains('multi_agent')) 'Codex restrictions missing.'
+                Assert (($cliArgs -split '\r?\n') -ccontains 'resume') 'Codex continuation command missing.'
             }
-            Failure (Resume-Call $first.Session)
+            Failure (Continue-Session $first.Session)
             Save $message 'Assess the same task independently.'
         }
         Case "$provider saves arbitrary UTF-8 replies without echoing them" {
-            $env:FAKE_REPLY = "# Finding`nQuotes: `"yes`", literal `$() and backticks ``.`nUnicode: $([char]0x03bb)$([char]0x65e5)`nReply: fake`nResume: fake"
+            $env:FAKE_REPLY = "# Finding`nQuotes: `"yes`", literal `$() and backticks ``.`nUnicode: $([char]0x03bb)$([char]0x65e5)`nReply: fake`nSession: fake"
             $result = Success (Fresh $provider)
             Assert ((Read $result.Reply) -ceq $env:FAKE_REPLY) 'Reply text changed.'
         }
         Case "$provider reports failures and invalidates an older successful session" {
             $first = Success (Fresh $provider)
             $env:FAKE_CASE = 'exit'
-            $failed = Resume-Call $first.Session
+            $failed = Continue-Session $first.Session
             Failure $failed
             Assert ($failed.Err.Contains('Diagnostics:')) 'Failed turn diagnostics missing.'
             $env:FAKE_CASE = ''
-            Failure (Resume-Call $first.Session)
+            Failure (Continue-Session $first.Session)
             Assert ((Read $first.Reply) -eq 'Independent finding') 'Failure overwrote earlier reply.'
         }
         Case "$provider rejects empty replies" {
@@ -161,7 +163,7 @@ try {
     Case 'Codex rejects a different ID on resume' {
         $first = Success (Fresh 'codex')
         $env:FAKE_CASE = 'wrong-id'
-        Failure (Resume-Call $first.Session)
+        Failure (Continue-Session $first.Session)
     }
     Case 'explicit provider works without host detection and supports the same provider' {
         $env:CLAUDECODE = '1'
@@ -200,20 +202,20 @@ try {
         Assert ($nestedError.Contains('Consultants must not invoke consult')) 'Child process bypassed the consultant guard.'
     }
     Case 'resume rejects missing, malformed and changed settings' {
-        Failure (Resume-Call (Join-Path $temp 'missing.txt'))
+        Failure (Continue-Session (Join-Path $temp 'missing.txt'))
         $bad = Join-Path $temp 'invalid.txt'
         Save $bad ''
-        Failure (Resume-Call $bad)
+        Failure (Continue-Session $bad)
         Save $bad "consult-session-1`ncodex`ninvalid`n"
-        Failure (Resume-Call $bad)
+        Failure (Continue-Session $bad)
         $first = Success (Fresh)
         foreach ($change in @(@('--provider', 'codex'), @('--repo', $temp), @('--model', 'different'), @('--effort', 'low'))) {
-            Failure (Resume-Call $first.Session $change)
+            Failure (Continue-Session $first.Session $change)
         }
-        [void](Success (Resume-Call $first.Session))
+        [void](Success (Continue-Session $first.Session))
     }
     Case 'invalid input fails before running a CLI' {
-        foreach ($arguments in @(@('--resume', ''), @('--timeout', '0'), @('--timeout', 'bad'), @('--unknown', 'value'))) {
+        foreach ($arguments in @(@('--session', ''), @('--resume', 'unused'), @('--timeout', '0'), @('--timeout', 'bad'), @('--unknown', 'value'))) {
             Failure (Fresh 'claude' $arguments)
         }
         Save $message " `n`t"
@@ -232,21 +234,21 @@ try {
         $second = Success (Finish-Call $b)
         Assert ($first.Reply -ne $second.Reply -and $first.Session -ne $second.Session) 'Parallel calls shared output files.'
         Assert ($first.Fields[2] -ne $second.Fields[2]) 'Parallel calls shared a conversation.'
-        [void](Success (Resume-Call $first.Session))
-        [void](Success (Resume-Call $second.Session))
+        [void](Success (Continue-Session $first.Session))
+        [void](Success (Continue-Session $second.Session))
     }
     Case 'an active turn blocks a concurrent follow-up' {
         $first = Success (Fresh)
         $env:FAKE_CASE = 'sleep'
-        $running = Start-Call @('--resume', $first.Session, '--message', $message, '--timeout', '2')
+        $running = Start-Call @('--session', $first.Session, '--message', $message, '--timeout', '2')
         $lock = Join-Path (Split-Path (Split-Path $first.Session)) 'lock'
         $watch = [Diagnostics.Stopwatch]::StartNew()
         while (!(Test-Path -LiteralPath $lock) -and $watch.Elapsed.TotalSeconds -lt 8) { Start-Sleep -Milliseconds 30 }
         Assert (Test-Path -LiteralPath $lock) 'First follow-up did not acquire its lock.'
         $env:FAKE_CASE = ''
-        Failure (Resume-Call $first.Session)
+        Failure (Continue-Session $first.Session)
         Failure (Finish-Call $running)
-        Failure (Resume-Call $first.Session)
+        Failure (Continue-Session $first.Session)
     }
     Case 'checkout root is used when called from a subdirectory' {
         if (Get-Command git -ErrorAction SilentlyContinue) {

@@ -9,22 +9,22 @@ uuid_ok() { [[ $1 =~ ^[[:xdigit:]]{8}-[[:xdigit:]]{4}-[[:xdigit:]]{4}-[[:xdigit:
 outside() { case "$1/" in "$repo/"*) fail 'Keep diagnostic files outside the project.';; esac; }
 absolute_file() { (cd "$(dirname "$1")" && printf '%s/%s\n' "$(pwd -P)" "$(basename "$1")"); }
 
-provider='' host='' repo='' resume='' message='' model='' effort='' cli='' artifacts='' seconds=600
+provider='' host='' repo='' session_file='' message='' model='' effort='' cli='' artifacts='' seconds=600
 while [ "$#" -gt 0 ]; do
     option=$1
     case "$option" in
-        --host|--provider|--repo|--resume|--message|--model|--effort|--cli|--artifacts|--timeout)
+        --host|--provider|--repo|--session|--message|--model|--effort|--cli|--artifacts|--timeout)
             [[ "$#" -ge 2 && -n "$2" ]] || fail "$option needs a nonempty value."
             case "$2" in *$'\n'*|*$'\r'*) fail 'Options cannot contain line breaks.';; esac
             case "$option" in
                 --host) host=$2;; --provider) provider=$2;; --repo) repo=$2;;
-                --resume) resume=$2;; --message) message=$2;; --model) model=$2;;
+                --session) session_file=$2;; --message) message=$2;; --model) model=$2;;
                 --effort) effort=$2;; --cli) cli=$2;; --artifacts) artifacts=$2;;
                 --timeout) seconds=$2;;
             esac
             shift 2;;
         --help|-h)
-            printf '%s\n' 'Usage: bash runner.sh --message FILE [--resume SESSION.txt]' \
+            printf '%s\n' 'Usage: bash runner.sh --message FILE [--session SESSION.txt]' \
                 'Options: --provider claude|codex --repo DIR --timeout SECONDS' \
                 'Advanced: --host --model --effort --cli --artifacts'
             exit 0;;
@@ -40,14 +40,14 @@ case "$host" in ''|claude|codex) ;; *) fail 'Unknown host.';; esac
 case "$effort" in ''|low|medium|high|xhigh|max) ;; *) fail 'Unknown effort.';; esac
 
 session='' conversation=''
-if [ -n "$resume" ]; then
+if [ -n "$session_file" ]; then
     [ -z "$artifacts" ] || fail '--artifacts is only valid for a new conversation.'
-    [ -f "$resume" ] || fail 'Session file does not exist.'
-    [ -s "$resume" ] || fail 'Session file is empty.'
-    resume=$(absolute_file "$resume")
+    [ -f "$session_file" ] || fail 'Session file does not exist.'
+    [ -s "$session_file" ] || fail 'Session file is empty.'
+    session_file=$(absolute_file "$session_file")
     # Read session fields as data.
     fields=()
-    while IFS= read -r line || [ -n "$line" ]; do fields+=("${line%$'\r'}"); done < "$resume"
+    while IFS= read -r line || [ -n "$line" ]; do fields+=("${line%$'\r'}"); done < "$session_file"
     [[ "${#fields[@]}" -eq 8 && "${fields[0]}" = 'consult-session-1' ]] || fail 'Invalid session file.'
     case "${fields[1]}" in claude|codex) ;; *) fail 'Invalid session provider.';; esac
     uuid_ok "${fields[2]}" || fail 'Invalid conversation ID.'
@@ -63,8 +63,8 @@ if [ -n "$resume" ]; then
     provider=${fields[1]} session=${fields[2]} repo=${fields[3]}
     model=${fields[4]} effort=${fields[5]} cli=${fields[6]} host=${fields[7]}
     case "$repo" in /*) ;; *) fail 'Invalid saved working directory.';; esac
-    conversation=$(cd "$(dirname "$resume")/.." && pwd -P)
-    [ "$(basename "$resume")" = session.txt ] || fail 'Invalid session path.'
+    conversation=$(cd "$(dirname "$session_file")/.." && pwd -P)
+    [ "$(basename "$session_file")" = session.txt ] || fail 'Invalid session path.'
 else
     if [ -z "$host" ]; then
         claude_host='' codex_host=''
@@ -121,8 +121,8 @@ cleanup() {
 trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
-if [ -n "$resume" ]; then
-    [[ -f "$conversation/latest.txt" && "$(cat "$conversation/latest.txt")" = "$resume" ]] || fail 'Session is stale; use only the latest successful turn.'
+if [ -n "$session_file" ]; then
+    [[ -f "$conversation/latest.txt" && "$(cat "$conversation/latest.txt")" = "$session_file" ]] || fail 'Session is stale; use only the latest successful turn.'
 fi
 turn=$(mktemp -d "$conversation/turn.XXXXXX")
 printf '%s\n' "$turn/session.txt" > "$conversation/latest.tmp"
@@ -181,4 +181,4 @@ else
 fi
 if [ ! -f "$turn/reply.txt" ] || ! LC_ALL=C grep -q '[^[:space:]]' "$turn/reply.txt"; then turn_fail 'CLI returned an empty reply.'; fi
 printf '%s\n' consult-session-1 "$provider" "$session" "$repo" "$model" "$effort" "$cli" "$host" > "$turn/session.txt"
-printf 'Reply: %s\nResume: %s\n' "$turn/reply.txt" "$turn/session.txt"
+printf 'Reply: %s\nSession: %s\n' "$turn/reply.txt" "$turn/session.txt"

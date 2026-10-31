@@ -22,7 +22,7 @@ The selected provider's CLI must be installed and authenticated. The runner uses
 
 The consultant needs relevant requirements, repository access and evidence. It does not inherit your agent's conversation or loaded skills, so your agent includes the relevant task instructions, constraints and decisions in its brief. Your agent provides test results and makes project changes. The CLI retains conversation metadata and diagnostics outside the project.
 
-The runner saves the reply and a session record in separate text files and prints their full paths. It starts the CLI in the project's checkout root and uses that directory for follow-ups. Add `--resume` with the session path to continue the conversation.
+The runner saves the consultant's reply in a plain-text file and prints its full path alongside the session path. It starts the CLI in the project's checkout root and uses that directory for follow-ups. Add `--session` with the session path to continue the conversation.
 
 ## A second opinion with continuity
 
