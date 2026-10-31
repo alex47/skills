@@ -23,6 +23,7 @@ fi
 printf '%s\n' "$session" > "$FAKE_CAPTURE/id.txt"
 case "${FAKE_CASE:-}" in
     exit) printf 'provider failure\n' >&2; exit 7;;
+    throw) printf 'fixture exception\n' >&2; exit 1;;
     sleep) sleep 30 & echo "$!" > "$FAKE_CAPTURE/child.txt"; wait;;
     nested)
         bash "$FAKE_RUNNER" --provider claude --message "$FAKE_CAPTURE/prompt.txt" > "$FAKE_CAPTURE/nested-out.txt" 2> "$FAKE_CAPTURE/nested-err.txt" && exit 9

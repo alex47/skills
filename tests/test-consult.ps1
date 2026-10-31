@@ -59,7 +59,13 @@ function Fresh($Provider = 'claude', $Extra = @()) {
 }
 function Continue-Session($Session, $Extra = @()) { Invoke-Call (@('--session', $Session, '--message', $message) + $Extra) }
 function Success($Result) {
-    Assert ($Result.Code -eq 0) ("Failed: " + $Result.Err)
+    $failure = 'Failed: ' + $Result.Err
+    if ($Result.Code -ne 0 -and $Result.Err -match '(?m)^Diagnostics: (.+)\r?$') {
+        $diagnostics = $Matches[1].TrimEnd("`r")
+        $cliStderr = Join-Path $diagnostics 'stderr.txt'
+        if (Test-Path -LiteralPath $cliStderr) { $failure += "`nCLI stderr:`n" + (Read $cliStderr) }
+    }
+    Assert ($Result.Code -eq 0) $failure
     Assert ($Result.Err -eq '') ('Unexpected stderr: ' + $Result.Err)
     $lines = $Result.Out.TrimEnd("`r", "`n") -split '\r?\n'
     Assert ($lines.Count -eq 2 -and $lines[0].StartsWith('Reply: ') -and $lines[1].StartsWith('Session: ')) 'Success must print only two labeled paths.'
@@ -120,6 +126,9 @@ try {
             } else {
                 Assert ($cliArgs.Contains('sandbox_mode="read-only"') -and $cliArgs.Contains('approval_policy="never"') -and $cliArgs.Contains('multi_agent')) 'Codex restrictions missing.'
                 Assert (($cliArgs -split '\r?\n') -ccontains 'resume') 'Codex continuation command missing.'
+                $argumentLines = $cliArgs.TrimEnd("`r", "`n") -split '\r?\n'
+                Assert (@($argumentLines | Where-Object { $_ -ceq '-c' }).Count -eq 3) 'Repeated Codex config arguments changed.'
+                Assert ($argumentLines[-1] -ceq '-') 'Codex stdin argument changed.'
             }
             Failure (Continue-Session $first.Session)
             Save $message 'Assess the same task independently.'
@@ -153,6 +162,14 @@ try {
             $diagnostics = ($result.Err -split '\r?\n' | Where-Object { $_.StartsWith('Diagnostics: ') }).Substring(13)
             Assert ((Test-Path -LiteralPath (Join-Path $diagnostics 'stderr.txt'))) 'Timeout discarded stderr diagnostics.'
         }
+    }
+    Case 'CLI exceptions appear in unexpected-failure diagnostics' {
+        $env:FAKE_CASE = 'throw'
+        $result = Fresh 'codex'
+        Failure $result
+        $errorText = ''
+        try { [void](Success $result) } catch { $errorText = $_.Exception.Message }
+        Assert ($errorText.Contains('CLI stderr:') -and $errorText.Contains('fixture exception')) 'Fixture stderr was omitted from the failure report.'
     }
     foreach ($problem in @('malformed', 'no-id', 'duplicate-id', 'no-completion', 'duplicate-completion', 'failed-event')) {
         Case "Codex rejects $problem events" {

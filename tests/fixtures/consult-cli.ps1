@@ -25,6 +25,7 @@ if (!$session) { $session = [guid]::NewGuid().ToString() }
 Save 'id.txt' $session
 switch ($env:FAKE_CASE) {
     'exit' { [Console]::Error.WriteLine('provider failure'); exit 7 }
+    'throw' { throw 'fixture exception' }
     'sleep' { Start-Sleep -Seconds 30 }
     'nested' {
         $start = New-Object Diagnostics.ProcessStartInfo

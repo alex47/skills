@@ -22,6 +22,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 5
     strategy:
+      fail-fast: false
       matrix:
         include:
           - os: ubuntu-latest
@@ -37,7 +38,7 @@ jobs:
             runner: PowerShell
             shell: pwsh
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Run offline runner tests (PowerShell 7)
         if: matrix.shell == 'pwsh'
         shell: pwsh
