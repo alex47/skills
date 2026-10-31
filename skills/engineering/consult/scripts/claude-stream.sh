@@ -79,7 +79,7 @@ while :; do
         sleep "$seconds"
         : > "$turn/timed-out"
         kill_tree "$child"
-    ) &
+    ) 2>/dev/null &
     timer=$!
     {
         printf '{"type":"user","message":{"role":"user","content":'

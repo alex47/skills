@@ -162,6 +162,7 @@ if [ "$provider" = claude ]; then
     args=(-p --output-format text --tools 'Read,Glob,Grep' --allowedTools 'Read,Glob,Grep' --permission-mode dontAsk)
     if [ -n "$session" ]; then args+=(--resume "$session"); else
         session=$(uuidgen 2>/dev/null || od -An -N16 -tx1 /dev/urandom | tr -d ' \n' | sed 's/^\(.\{8\}\)\(.\{4\}\).\(.\{3\}\).\(.\{3\}\)\(.\{12\}\)$/\1-\2-4\3-8\4-\5/')
+        session=$(printf '%s' "$session" | tr 'A-F' 'a-f')
         uuid_ok "$session" || fail 'Could not create a conversation ID.'
         args+=(--session-id "$session")
     fi
@@ -187,7 +188,7 @@ child=$!
     sleep "$seconds"
     : > "$turn/timed-out"
     kill_tree "$child"
-) &
+) 2>/dev/null &
 timer=$!
 code=0
 wait "$child" || code=$?

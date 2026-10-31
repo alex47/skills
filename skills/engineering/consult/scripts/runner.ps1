@@ -38,12 +38,17 @@ function Stop-Tree($Process) {
 function Run-Process($Executable, $Arguments, $Directory, [string]$InputText, [int]$Timeout, $Diagnostics = '', $Streaming = $false) {
     $start = New-Object Diagnostics.ProcessStartInfo
     if ([IO.Path]::GetExtension($Executable) -eq '.ps1') {
-        # Array splatting preserves CLI flags as literal arguments in PowerShell 5.1.
-        $literalArguments = @($Arguments | ForEach-Object { "'" + $_.Replace("'", "''") + "'" })
-        $invocation = '$ErrorActionPreference = ''Stop''; $consultArguments = @(' + ($literalArguments -join ',') + '); & ' +
-            "'" + $Executable.Replace("'", "''") + "'" + ' @consultArguments; exit $LASTEXITCODE'
-        $encoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($invocation))
-        $Arguments = @('-NoProfile', '-NonInteractive', '-OutputFormat', 'Text', '-EncodedCommand', $encoded)
+        if ($Streaming) {
+            # A file entry point leaves stdin available for streaming messages.
+            $Arguments = @('-NoProfile', '-NonInteractive', '-File', $Executable) + $Arguments
+        } else {
+            # Array splatting preserves CLI flags as literal arguments in PowerShell 5.1.
+            $literalArguments = @($Arguments | ForEach-Object { "'" + $_.Replace("'", "''") + "'" })
+            $invocation = '$ErrorActionPreference = ''Stop''; $consultArguments = @(' + ($literalArguments -join ',') + '); & ' +
+                "'" + $Executable.Replace("'", "''") + "'" + ' @consultArguments; exit $LASTEXITCODE'
+            $encoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($invocation))
+            $Arguments = @('-NoProfile', '-NonInteractive', '-OutputFormat', 'Text', '-EncodedCommand', $encoded)
+        }
         $Executable = [Diagnostics.Process]::GetCurrentProcess().MainModule.FileName
     }
     $start.FileName = $Executable

@@ -3,7 +3,11 @@ $ErrorActionPreference = 'Stop'
 $utf8 = New-Object Text.UTF8Encoding($false)
 [Console]::OutputEncoding = $utf8
 [Console]::InputEncoding = $utf8
-function Save($Name, $Value) { [IO.File]::WriteAllText((Join-Path $env:FAKE_CAPTURE $Name), [string]$Value, $utf8) }
+function Save($Name, $Value) {
+    $file = [IO.File]::Open((Join-Path $env:FAKE_CAPTURE $Name), [IO.FileMode]::Create, [IO.FileAccess]::Write, [IO.FileShare]::ReadWrite)
+    try { $bytes = $utf8.GetBytes([string]$Value); $file.Write($bytes, 0, $bytes.Length) }
+    finally { $file.Dispose() }
+}
 Save 'cwd.txt' ([Environment]::CurrentDirectory)
 Save 'args.txt' ($args -join "`n")
 Save 'consultant.txt' $env:CONSULT_CONSULTANT

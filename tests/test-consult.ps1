@@ -100,7 +100,12 @@ function Start-Live($Extra = @()) {
         Assert ($secondLine.Wait(15000)) 'Live conversation did not report its session.'
         $paths = Success @{ Code = 0; Out = $firstLine + "`n" + $secondLine.GetAwaiter().GetResult() + "`n"; Err = '' }
         return @{ Call = $call; Paths = $paths }
-    } catch { $call.Process.Kill(); $call.Process.Dispose(); throw }
+    } catch {
+        $cause = $_
+        try { if (!$call.Process.HasExited) { $call.Process.Kill() } } catch {}
+        $call.Process.Dispose()
+        throw $cause
+    }
 }
 function Stop-Live($Live) {
     $closed = Invoke-Call @('--close', $Live.Paths.Session)
@@ -130,7 +135,7 @@ try {
             Assert ($first.Fields.Count -eq 8 -and $first.Fields[0] -eq 'consult-session-1') 'Session is not the expected plain-text format.'
             Assert ($first.Fields[1] -eq $provider) 'Wrong provider.'
             if ($provider -eq 'claude') {
-                Assert ($first.Fields[2] -match '^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$') 'Assigned Claude ID is not a version 4 UUID.'
+                Assert ($first.Fields[2] -cmatch '^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$') 'Assigned Claude ID is not a canonical version 4 UUID.'
             }
             Assert ((Read (Join-Path $capture 'cwd.txt')).Trim() -eq $repo) 'CLI launched in the wrong directory.'
             $prompt = Read (Join-Path $capture 'prompt.txt')
@@ -205,6 +210,7 @@ try {
             Assert ($second.Fields[4] -ceq $chosenModel -and $second.Fields[5] -ceq 'high') 'Live follow-up lost its model or effort.'
             $cliArgs = Read (Join-Path $capture 'args.txt')
             Assert ($cliArgs.Contains('--no-session-persistence') -and $cliArgs.Contains('stream-json')) 'Live mode depended on protected session storage.'
+            Assert (($cliArgs -split '\r?\n') -ccontains $chosenModel) 'Live CLI argument quoting changed the model value.'
             Assert ($cliArgs.Contains('Read,Glob,Grep') -and $cliArgs.Contains('dontAsk') -and !$cliArgs.Contains('--safe-mode')) 'Live Claude lost its read-only tools or settings policy.'
             Assert ((Read $blocked) -eq 'not a directory') 'Runner changed the original profile.'
             Failure (Continue-Session $first.Session)

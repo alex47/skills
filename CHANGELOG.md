@@ -1,5 +1,11 @@
 # mattpocock-skills
 
+## 1.3.3-consult.3
+
+### Patch Changes
+
+- Keep streaming stdin available in PowerShell wrappers, isolate parallel fixture writes and suppress watchdog job notifications on macOS.
+
 ## 1.3.3-consult.2
 
 ### Patch Changes

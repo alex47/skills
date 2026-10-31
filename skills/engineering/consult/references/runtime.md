@@ -1,8 +1,8 @@
 # Runtime
 
-Use nonblocking execution so you can continue your own work while the consultant runs. Read the reply once both output paths appear. Run only one turn at a time per conversation.
+Run the runner directly using the execution tool's nonblocking mode so you can continue your own work. Read the reply once both output paths appear. Run only one turn at a time per conversation.
 
-If Claude's session directory is not writable, the runner keeps its conversation in a live process. Keep the initial execution session open for follow-ups. When finished, run the runner with `--close "SESSION"`. Follow-ups still use `--session`.
+If Claude's session directory is not writable, the runner keeps its conversation in a live process using the existing permissions. Keep the initial execution session open for follow-ups. When finished, run the runner with `--close "SESSION"`. Follow-ups still use `--session`.
 
 ## Linux, macOS and WSL
 
