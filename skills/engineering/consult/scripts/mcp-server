@@ -44,7 +44,7 @@ reply() { result "$1" '{"content":[{"type":"text","text":"'"$(printf '%s' "$2" |
 # rather than decoded, because hosts send paths, which never need escapes on these platforms.
 parse_arguments() {
     local rest key value
-    unset arg_message arg_repo arg_session arg_provider arg_timeout arg_job arg_offset
+    unset arg_message arg_project arg_session arg_provider arg_timeout arg_job arg_offset
     [[ $1 =~ \"arguments\"[[:space:]]*:[[:space:]]*\{(.*)$ ]] || return 0
     rest=${BASH_REMATCH[1]}
     while :; do
@@ -53,7 +53,7 @@ parse_arguments() {
             [[ $rest =~ ^[[:space:]]*\"([a-z_]+)\"[[:space:]]*:[[:space:]]*([0-9]+)[[:space:]]*(,|\})(.*)$ ]]; then
             key=${BASH_REMATCH[1]} value=${BASH_REMATCH[2]}
             case "$key" in
-                message) arg_message=$value;; repo) arg_repo=$value;; session) arg_session=$value;;
+                message) arg_message=$value;; project) arg_project=$value;; session) arg_session=$value;;
                 provider) arg_provider=$value;; timeout) arg_timeout=$value;;
                 job) arg_job=$value;; offset) arg_offset=$value;;
             esac
@@ -71,9 +71,9 @@ start_job() {
     local id=$1 job args
     if [ "${CONSULT_CONSULTANT:-}" = 1 ]; then reply "$id" 'consult: Consultants must not invoke consult.' true; return; fi
     [ -n "${arg_message:-}" ] || { reply "$id" 'consult: message is required.' true; return; }
-    [ -n "${arg_repo:-}${arg_session:-}" ] || { reply "$id" 'consult: repo is required for a new conversation.' true; return; }
+    [ -n "${arg_project:-}${arg_session:-}" ] || { reply "$id" 'consult: project is required for a new conversation.' true; return; }
     args=(--host "$host" --message "$arg_message")
-    [ -z "${arg_repo:-}" ] || args+=(--repo "$arg_repo")
+    [ -z "${arg_project:-}" ] || args+=(--repo "$arg_project")
     [ -z "${arg_session:-}" ] || args+=(--session "$arg_session")
     [ -z "${arg_provider:-}" ] || args+=(--provider "$arg_provider")
     [ -z "${arg_timeout:-}" ] || args+=(--timeout "$arg_timeout")
@@ -157,7 +157,7 @@ trap shutdown EXIT
 trap 'exit 143' TERM HUP
 trap 'exit 130' INT
 
-tools='[{"name":"consult","description":"Start a turn with a separate read-only consultant. Returns a job immediately while the consultant works; collect the reply with consult_wait.","annotations":{"readOnlyHint":true},"inputSchema":{"type":"object","properties":{"message":{"type":"string","description":"Absolute path to a UTF-8 text file containing your message"},"repo":{"type":"string","description":"Absolute path to the project; required for a new conversation"},"session":{"type":"string","description":"Session path from the latest reply, to continue that conversation"},"provider":{"type":"string","enum":["claude","codex"],"description":"Consultant provider for a new conversation; defaults to the other provider"},"timeout":{"type":"integer","description":"Turn timeout in seconds; defaults to 600"}},"required":["message"]}},{"name":"consult_wait","description":"Wait for a consultation job and return its reply, page by page, followed by the session path for follow-ups.","annotations":{"readOnlyHint":true},"inputSchema":{"type":"object","properties":{"job":{"type":"string","description":"Job returned by consult"},"offset":{"type":"integer","description":"Offset given by the previous page; omit for the first page"}},"required":["job"]}},{"name":"consult_cancel","description":"Stop a running consultation job. A cancelled turn ends its conversation.","annotations":{"readOnlyHint":false,"destructiveHint":false,"openWorldHint":false},"inputSchema":{"type":"object","properties":{"job":{"type":"string","description":"Job returned by consult"}},"required":["job"]}}]'
+tools='[{"name":"consult","description":"Start a turn with a separate read-only consultant. Returns a job immediately while the consultant works; collect the reply with consult_wait.","annotations":{"readOnlyHint":true},"inputSchema":{"type":"object","properties":{"message":{"type":"string","description":"Absolute path to a UTF-8 text file containing your message"},"project":{"type":"string","description":"Absolute path to the project folder; required for a new conversation"},"session":{"type":"string","description":"Session path from the latest reply, to continue that conversation"},"provider":{"type":"string","enum":["claude","codex"],"description":"Consultant provider for a new conversation; defaults to the other provider"},"timeout":{"type":"integer","description":"Turn timeout in seconds; defaults to 600"}},"required":["message"]}},{"name":"consult_wait","description":"Wait for a consultation job and return its reply, page by page, followed by the session path for follow-ups.","annotations":{"readOnlyHint":true},"inputSchema":{"type":"object","properties":{"job":{"type":"string","description":"Job returned by consult"},"offset":{"type":"integer","description":"Offset given by the previous page; omit for the first page"}},"required":["job"]}},{"name":"consult_cancel","description":"Stop a running consultation job. A cancelled turn ends its conversation.","annotations":{"readOnlyHint":false,"destructiveHint":false,"openWorldHint":false},"inputSchema":{"type":"object","properties":{"job":{"type":"string","description":"Job returned by consult"}},"required":["job"]}}]'
 
 while IFS= read -r line || [ -n "$line" ]; do
     [[ $line =~ \"id\"[[:space:]]*:[[:space:]]*([0-9]+|\"[^\"\\]*\") ]] || continue

@@ -7,7 +7,7 @@ Consult through the plugin's MCP tools: `consult`, `consult_wait` and `consult_c
 Write your message as UTF-8 text to a new file outside the project: create it with `mktemp /tmp/consult-message.XXXXXX` on Linux, macOS and WSL, or `[IO.Path]::GetTempFileName()` on Windows. Then call `consult` with:
 
 - `message`: absolute path to that file.
-- `repo`: absolute path to the project. Required for a new conversation.
+- `project`: absolute path to the project folder. Required for a new conversation.
 - `session`: the session path from the latest reply, to continue that conversation.
 
 `consult` returns a job immediately while the consultant works. Continue your own work in the meantime.
@@ -21,9 +21,9 @@ Call `consult_wait` with the job. It returns the reply, followed by the session 
 - If it says the consultant is still working, call it again with the same job.
 - If it says more of the reply remains, call it again with the job and the offset it gives. Repeat until it reports the end of the reply.
 
-## 3. Cancel
+## Stopping early
 
-Call `consult_cancel` with the job to stop a consultation you no longer need. A cancelled or failed turn ends its conversation.
+A turn ends on its own once you have collected its reply; there is nothing to clean up. Only if you no longer need a running consultation, for example because the task changed, call `consult_cancel` with the job. A cancelled or failed turn ends its conversation.
 
 ## Failures
 

@@ -59,10 +59,12 @@ function Valid-Job([string]$Job) {
 function Start-Consultation($Id, $Arguments) {
     if ($env:CONSULT_CONSULTANT -eq '1') { Reply $Id 'consult: Consultants must not invoke consult.' $true; return }
     if (!$Arguments.message) { Reply $Id 'consult: message is required.' $true; return }
-    if (!$Arguments.repo -and !$Arguments.session) { Reply $Id 'consult: repo is required for a new conversation.' $true; return }
+    if (!$Arguments.project -and !$Arguments.session) { Reply $Id 'consult: project is required for a new conversation.' $true; return }
     $runnerArgs = @('--host', $settings.host, '--message', [string]$Arguments.message)
-    foreach ($name in @('repo', 'session', 'provider', 'timeout')) {
-        if ($null -ne $Arguments.$name -and [string]$Arguments.$name -ne '') { $runnerArgs += @("--$name", [string]$Arguments.$name) }
+    # The tool's project argument is the runner's --repo.
+    foreach ($pair in @(@('project', 'repo'), @('session', 'session'), @('provider', 'provider'), @('timeout', 'timeout'))) {
+        $value = $Arguments.($pair[0])
+        if ($null -ne $value -and [string]$value -ne '') { $runnerArgs += @("--$($pair[1])", [string]$value) }
     }
     if ($settings.cli) { $runnerArgs += @('--cli', $settings.cli) }
     if ($settings.artifacts -and !$Arguments.session) { $runnerArgs += @('--artifacts', $settings.artifacts) }
@@ -153,7 +155,7 @@ $tools = @(
         annotations = @{ readOnlyHint = $true }
         inputSchema = [ordered]@{ type = 'object'; required = @('message'); properties = [ordered]@{
             message = @{ type = 'string'; description = 'Absolute path to a UTF-8 text file containing your message' }
-            repo = @{ type = 'string'; description = 'Absolute path to the project; required for a new conversation' }
+            project = @{ type = 'string'; description = 'Absolute path to the project folder; required for a new conversation' }
             session = @{ type = 'string'; description = 'Session path from the latest reply, to continue that conversation' }
             provider = @{ type = 'string'; enum = @('claude', 'codex'); description = 'Consultant provider for a new conversation; defaults to the other provider' }
             timeout = @{ type = 'integer'; description = 'Turn timeout in seconds; defaults to 600' } } } },

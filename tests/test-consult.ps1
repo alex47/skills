@@ -379,7 +379,7 @@ try {
         Case "MCP from $serverHost starts at once, returns the reply and continues the conversation" {
             $server = Start-Server @() $serverHost
             try {
-                $job = Start-Consult $server ([ordered]@{ message = $message; repo = $repo })
+                $job = Start-Consult $server ([ordered]@{ message = $message; project = $repo })
                 $first = Collect $server $job
                 Assert (!$first.IsError) ('Consultation failed: ' + $first.Text)
                 Assert ($first.Reply -ceq 'Independent finding' -and $first.Pages -eq 1) 'Reply text changed.'
@@ -388,7 +388,7 @@ try {
                 $second = Collect $server (Start-Consult $server ([ordered]@{ message = $message; session = $first.Session }))
                 Assert (!$second.IsError -and $second.Fields[2] -eq $first.Fields[2]) 'Follow-up changed conversation.'
                 Assert ((Read (Join-Path $capture 'prompt.txt')).Contains('Clarify the earlier finding.')) 'Follow-up message missing.'
-                $other = Collect $server (Start-Consult $server ([ordered]@{ message = $message; repo = $repo; provider = $serverHost }))
+                $other = Collect $server (Start-Consult $server ([ordered]@{ message = $message; project = $repo; provider = $serverHost }))
                 Assert ($other.Fields[1] -eq $serverHost) 'Explicit provider ignored.'
             } finally {
                 Save $message 'Assess the same task independently.'
@@ -405,7 +405,7 @@ try {
         $env:FAKE_REPLY_FILE = $replyFile
         $server = Start-Server
         try {
-            $result = Collect $server (Start-Consult $server ([ordered]@{ message = $message; repo = $repo }))
+            $result = Collect $server (Start-Consult $server ([ordered]@{ message = $message; project = $repo }))
             Assert (!$result.IsError -and $result.Pages -gt 3) 'Long reply was not paged.'
             Assert ($result.Reply -ceq $text.ToString()) 'Pages did not reassemble the exact reply.'
         } finally { Stop-Server $server }
@@ -414,7 +414,7 @@ try {
         $env:FAKE_CASE = 'exit'
         $server = Start-Server
         try {
-            $result = Collect $server (Start-Consult $server ([ordered]@{ message = $message; repo = $repo }))
+            $result = Collect $server (Start-Consult $server ([ordered]@{ message = $message; project = $repo }))
             Assert ($result.IsError -and $result.Text.Contains('consult:') -and $result.Text.Contains('Diagnostics:')) 'Failure not reported.'
         } finally { Stop-Server $server }
     }
@@ -422,7 +422,7 @@ try {
         $env:FAKE_CASE = 'sleep'
         $server = Start-Server @('--wait-limit', '1')
         try {
-            $job = Start-Consult $server ([ordered]@{ message = $message; repo = $repo })
+            $job = Start-Consult $server ([ordered]@{ message = $message; project = $repo })
             $running = Tool $server 'consult_wait' ([ordered]@{ job = $job })
             Assert (!$running.IsError -and $running.Text.StartsWith('The consultant is still working.')) 'Wait did not return while running.'
             $cancel = Tool $server 'consult_cancel' ([ordered]@{ job = $job })
@@ -440,7 +440,7 @@ try {
         if ($Runner -eq 'Bash') { $started = Join-Path $capture 'child.txt' }
         Remove-Item -LiteralPath $started -ErrorAction SilentlyContinue
         $server = Start-Server
-        $job = Start-Consult $server ([ordered]@{ message = $message; repo = $repo })
+        $job = Start-Consult $server ([ordered]@{ message = $message; project = $repo })
         $watch = [Diagnostics.Stopwatch]::StartNew()
         while (!(Test-Path -LiteralPath $started) -and $watch.Elapsed.TotalSeconds -lt 10) { Start-Sleep -Milliseconds 50 }
         Stop-Server $server
@@ -456,18 +456,21 @@ try {
         $server = Start-Server
         try {
             Assert (Tool $server 'consult_wait' ([ordered]@{ job = (Join-Path $temp 'missing') })).IsError 'Unknown job accepted.'
-            Assert (Tool $server 'consult' ([ordered]@{ message = $message })).IsError 'New conversation without repo accepted.'
-            Assert (Tool $server 'consult' ([ordered]@{ repo = $repo })).IsError 'Call without message accepted.'
+            $missing = Tool $server 'consult' ([ordered]@{ message = $message })
+            Assert ($missing.IsError -and $missing.Text.Contains('project is required')) 'New conversation without project accepted.'
+            $old = Tool $server 'consult' ([ordered]@{ message = $message; repo = $repo })
+            Assert ($old.IsError -and $old.Text.Contains('project is required')) 'The old repo argument still works.'
+            Assert (Tool $server 'consult' ([ordered]@{ project = $repo })).IsError 'Call without message accepted.'
             Assert (Tool $server 'unknown' @{}).IsError 'Unknown tool accepted.'
             if ($Runner -eq 'Bash') {
-                $escaped = Tool $server 'consult' ([ordered]@{ message = ($message + '"'); repo = $repo })
+                $escaped = Tool $server 'consult' ([ordered]@{ message = ($message + '"'); project = $repo })
                 Assert ($escaped.IsError -and $escaped.Text.Contains('escaped')) 'Escaped argument was not refused.'
             }
         } finally { Stop-Server $server }
         $env:CONSULT_CONSULTANT = '1'
         $server = Start-Server
         try {
-            $nested = Tool $server 'consult' ([ordered]@{ message = $message; repo = $repo })
+            $nested = Tool $server 'consult' ([ordered]@{ message = $message; project = $repo })
             Assert ($nested.IsError -and $nested.Text.Contains('Consultants must not invoke consult')) 'Consultant started a consultation.'
         } finally {
             Stop-Server $server
