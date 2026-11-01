@@ -95,7 +95,7 @@ start_job() {
     ) < /dev/null > /dev/null 2>&1 &
     started+=("$job")
     reply "$id" "Job: $job
-The consultant is working. Continue your own work, then call consult_wait with this job." false
+The consultant is working. Continue your own work, then call consult_collect with this job." false
 }
 
 # One page of the reply, cut at a line break, or before an incomplete UTF-8 sequence.
@@ -118,7 +118,7 @@ page() {
     fi
     offset=$((offset + ${#chunk}))
     if [ "$offset" -lt "$size" ]; then
-        footer="More of the reply remains. Call consult_wait again with this job and offset $offset."
+        footer="More of the reply remains. Call consult_collect again with this job and offset $offset."
     else
         footer='End of reply.'
     fi
@@ -129,7 +129,7 @@ finish_wait() {
     local id=$1 job=$2 offset=$3 deadline=$((SECONDS + wait_limit)) reply_file session
     while [ ! -f "$job/exit" ]; do
         if [ "$SECONDS" -ge "$deadline" ]; then
-            reply "$id" 'The consultant is still working. Call consult_wait again with this job.' false
+            reply "$id" 'The consultant is still working. Call consult_collect again with this job.' false
             return
         fi
         sleep 1
@@ -159,7 +159,7 @@ trap shutdown EXIT
 trap 'exit 143' TERM HUP
 trap 'exit 130' INT
 
-tools='[{"name":"consult","description":"Start a turn with a separate read-only consultant. Returns a job immediately while the consultant works; collect the reply with consult_wait.","annotations":{"readOnlyHint":true},"inputSchema":{"type":"object","properties":{"message":{"type":"string","description":"Absolute path to a UTF-8 text file containing your message"},"project":{"type":"string","description":"Absolute path to the project folder; required for a new conversation"},"session":{"type":"string","description":"Session path from the latest reply, to continue that conversation"},"provider":{"type":"string","enum":["claude","codex"],"description":"Consultant provider for a new conversation; defaults to the other provider"},"timeout":{"type":"integer","description":"Turn timeout in seconds; defaults to 600"}},"required":["message"]}},{"name":"consult_wait","description":"Wait for a consultation job and return its reply, page by page, followed by the session path for follow-ups.","annotations":{"readOnlyHint":true},"inputSchema":{"type":"object","properties":{"job":{"type":"string","description":"Job returned by consult"},"offset":{"type":"integer","description":"Offset given by the previous page; omit for the first page"}},"required":["job"]}},{"name":"consult_cancel","description":"Stop a running consultation job. A cancelled turn ends its conversation.","annotations":{"readOnlyHint":false,"destructiveHint":false,"openWorldHint":false},"inputSchema":{"type":"object","properties":{"job":{"type":"string","description":"Job returned by consult"}},"required":["job"]}}]'
+tools='[{"name":"consult_start","description":"Start a turn with a separate read-only consultant. Returns a job immediately while the consultant works; collect the reply with consult_collect.","annotations":{"readOnlyHint":true},"inputSchema":{"type":"object","properties":{"message":{"type":"string","description":"Absolute path to a UTF-8 text file containing your message"},"project":{"type":"string","description":"Absolute path to the project folder; required for a new conversation"},"session":{"type":"string","description":"Session path from the latest reply, to continue that conversation"},"provider":{"type":"string","enum":["claude","codex"],"description":"Consultant provider for a new conversation; defaults to the other provider"},"timeout":{"type":"integer","description":"Turn timeout in seconds; defaults to 600"}},"required":["message"]}},{"name":"consult_collect","description":"Collect the reply to a consultation job, waiting while the consultant works, page by page, followed by the session path for follow-ups.","annotations":{"readOnlyHint":true},"inputSchema":{"type":"object","properties":{"job":{"type":"string","description":"Job returned by consult_start"},"offset":{"type":"integer","description":"Offset given by the previous page; omit for the first page"}},"required":["job"]}},{"name":"consult_cancel","description":"Stop a running consultation job. A cancelled turn ends its conversation.","annotations":{"readOnlyHint":false,"destructiveHint":false,"openWorldHint":false},"inputSchema":{"type":"object","properties":{"job":{"type":"string","description":"Job returned by consult_start"}},"required":["job"]}}]'
 
 while IFS= read -r line || [ -n "$line" ]; do
     [[ $line =~ \"id\"[[:space:]]*:[[:space:]]*([0-9]+|\"[^\"\\]*\") ]] || continue
@@ -177,7 +177,7 @@ while IFS= read -r line || [ -n "$line" ]; do
                 reply "$id" 'consult: Arguments must be plain strings and integers; escaped characters are not supported.' true
                 continue
             fi
-            if [[ $line =~ \"name\"[[:space:]]*:[[:space:]]*\"consult_wait\" ]]; then
+            if [[ $line =~ \"name\"[[:space:]]*:[[:space:]]*\"consult_collect\" ]]; then
                 if ! valid_job "${arg_job:-}"; then reply "$id" 'consult: Unknown job.' true; continue; fi
                 case "${arg_offset:-0}" in *[!0-9]*) reply "$id" 'consult: offset must be an integer.' true; continue;; esac
                 finish_wait "$id" "$arg_job" "${arg_offset:-0}" &
@@ -186,7 +186,7 @@ while IFS= read -r line || [ -n "$line" ]; do
                 if ! valid_job "${arg_job:-}"; then reply "$id" 'consult: Unknown job.' true; continue; fi
                 if stop_job "$arg_job"; then reply "$id" 'Consultation cancelled.' false
                 else reply "$id" 'The consultation had already finished.' false; fi
-            elif [[ $line =~ \"name\"[[:space:]]*:[[:space:]]*\"consult\" ]]; then
+            elif [[ $line =~ \"name\"[[:space:]]*:[[:space:]]*\"consult_start\" ]]; then
                 start_job "$id"
             else
                 reply "$id" 'consult: Unknown tool.' true

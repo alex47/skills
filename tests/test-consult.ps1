@@ -147,7 +147,7 @@ function Stop-Server($Server) {
     } finally { $Server.Process.Dispose() }
 }
 function Start-Consult($Server, $Arguments) {
-    $result = Tool $Server 'consult' $Arguments
+    $result = Tool $Server 'consult_start' $Arguments
     Assert (!$result.IsError -and $result.Text -match '^Job: (.+)') ('consult did not return a job: ' + $result.Text)
     return $Matches[1].TrimEnd("`r")
 }
@@ -157,7 +157,7 @@ function Collect($Server, $Job) {
     for ($pages = 1; $pages -le 50; $pages++) {
         $arguments = [ordered]@{ job = $Job }
         if ($null -ne $offset) { $arguments.offset = $offset }
-        $result = Tool $Server 'consult_wait' $arguments
+        $result = Tool $Server 'consult_collect' $arguments
         if ($result.IsError) { return @{ IsError = $true; Text = $result.Text } }
         if ($result.Text.StartsWith('The consultant is still working.')) { $pages--; continue }
         $footer = $result.Text.LastIndexOf("`n---`nSession: ")
@@ -370,8 +370,8 @@ try {
             $init = Request $server 'initialize' ([ordered]@{ protocolVersion = '2025-06-18'; capabilities = @{}; clientInfo = @{ name = 'test'; version = '0' } })
             Assert ($init.result.protocolVersion -eq '2025-06-18') 'Server did not answer initialize.'
             $tools = @((Request $server 'tools/list' @{}).result.tools)
-            Assert ((@($tools | ForEach-Object { $_.name }) -join ',') -eq 'consult,consult_wait,consult_cancel') 'Unexpected tools.'
-            Assert ($tools[0].annotations.readOnlyHint -and $tools[1].annotations.readOnlyHint) 'Consult and wait must be read-only.'
+            Assert ((@($tools | ForEach-Object { $_.name }) -join ',') -eq 'consult_start,consult_collect,consult_cancel') 'Unexpected tools.'
+            Assert ($tools[0].annotations.readOnlyHint -and $tools[1].annotations.readOnlyHint) 'Start and collect must be read-only.'
             Assert (!$tools[2].annotations.destructiveHint -and !$tools[2].annotations.openWorldHint) 'Cancel must be non-destructive and closed-world.'
         } finally { Stop-Server $server }
     }
@@ -418,17 +418,17 @@ try {
             Assert ($result.IsError -and $result.Text.Contains('consult:') -and $result.Text.Contains('Diagnostics:')) 'Failure not reported.'
         } finally { Stop-Server $server }
     }
-    Case 'MCP wait returns while the consultant works, and cancel stops it' {
+    Case 'MCP collect returns while the consultant works, and cancel stops it' {
         $env:FAKE_CASE = 'sleep'
         $server = Start-Server @('--wait-limit', '1')
         try {
             $job = Start-Consult $server ([ordered]@{ message = $message; project = $repo })
-            $running = Tool $server 'consult_wait' ([ordered]@{ job = $job })
-            Assert (!$running.IsError -and $running.Text.StartsWith('The consultant is still working.')) 'Wait did not return while running.'
+            $running = Tool $server 'consult_collect' ([ordered]@{ job = $job })
+            Assert (!$running.IsError -and $running.Text.StartsWith('The consultant is still working.')) 'Collect did not return while running.'
             $cancel = Tool $server 'consult_cancel' ([ordered]@{ job = $job })
             Assert (!$cancel.IsError -and $cancel.Text -eq 'Consultation cancelled.') 'Cancel failed.'
             $watch = [Diagnostics.Stopwatch]::StartNew()
-            do { $after = Tool $server 'consult_wait' ([ordered]@{ job = $job }) } while ($after.Text.StartsWith('The consultant is still working.') -and $watch.Elapsed.TotalSeconds -lt 15)
+            do { $after = Tool $server 'consult_collect' ([ordered]@{ job = $job }) } while ($after.Text.StartsWith('The consultant is still working.') -and $watch.Elapsed.TotalSeconds -lt 15)
             Assert ($after.IsError -and $after.Text.Contains('cancelled')) ('Cancelled job not reported: ' + $after.Text)
             Assert ($watch.Elapsed.TotalSeconds -lt 15) 'Cancel did not stop the consultation promptly.'
             Assert ((Tool $server 'consult_cancel' ([ordered]@{ job = $job })).Text -eq 'The consultation had already finished.') 'Second cancel misreported.'
@@ -455,22 +455,23 @@ try {
     Case 'MCP rejects invalid calls and consultants' {
         $server = Start-Server
         try {
-            Assert (Tool $server 'consult_wait' ([ordered]@{ job = (Join-Path $temp 'missing') })).IsError 'Unknown job accepted.'
-            $missing = Tool $server 'consult' ([ordered]@{ message = $message })
+            Assert (Tool $server 'consult_collect' ([ordered]@{ job = (Join-Path $temp 'missing') })).IsError 'Unknown job accepted.'
+            $missing = Tool $server 'consult_start' ([ordered]@{ message = $message })
             Assert ($missing.IsError -and $missing.Text.Contains('project is required')) 'New conversation without project accepted.'
-            $old = Tool $server 'consult' ([ordered]@{ message = $message; repo = $repo })
+            $old = Tool $server 'consult_start' ([ordered]@{ message = $message; repo = $repo })
             Assert ($old.IsError -and $old.Text.Contains('project is required')) 'The old repo argument still works.'
-            Assert (Tool $server 'consult' ([ordered]@{ project = $repo })).IsError 'Call without message accepted.'
+            Assert (Tool $server 'consult_start' ([ordered]@{ project = $repo })).IsError 'Call without message accepted.'
             Assert (Tool $server 'unknown' @{}).IsError 'Unknown tool accepted.'
+            Assert (Tool $server 'consult' ([ordered]@{ message = $message; project = $repo })).IsError 'Old tool name accepted.'
             if ($Runner -eq 'Bash') {
-                $escaped = Tool $server 'consult' ([ordered]@{ message = ($message + '"'); project = $repo })
+                $escaped = Tool $server 'consult_start' ([ordered]@{ message = ($message + '"'); project = $repo })
                 Assert ($escaped.IsError -and $escaped.Text.Contains('escaped')) 'Escaped argument was not refused.'
             }
         } finally { Stop-Server $server }
         $env:CONSULT_CONSULTANT = '1'
         $server = Start-Server
         try {
-            $nested = Tool $server 'consult' ([ordered]@{ message = $message; project = $repo })
+            $nested = Tool $server 'consult_start' ([ordered]@{ message = $message; project = $repo })
             Assert ($nested.IsError -and $nested.Text.Contains('Consultants must not invoke consult')) 'Consultant started a consultation.'
         } finally {
             Stop-Server $server

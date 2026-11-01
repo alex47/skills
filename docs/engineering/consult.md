@@ -24,7 +24,7 @@ The consultant needs relevant requirements, repository access and evidence. It d
 
 ## Start, keep working, collect
 
-The agent consults through three tools. `consult` starts a turn and returns a job at once, so the agent keeps working while the consultant thinks. `consult_wait` collects the reply, in pages when it is long, followed by a session path that continues the same conversation. `consult_cancel` stops a turn that is no longer needed.
+The agent consults through three tools. `consult_start` starts a turn and returns a job at once, so the agent keeps working while the consultant thinks. `consult_collect` collects the reply, in pages when it is long, followed by a session path that continues the same conversation. `consult_cancel` stops a turn that is no longer needed.
 
 The consultation runs outside the host's sandbox, so the consultant's CLI can keep its conversation between turns, including what it read from your files. It starts the CLI in the project's checkout root and uses that directory for follow-ups. Closing the host session stops any consultation still running.
 
@@ -38,7 +38,7 @@ Follow-ups reuse the same consultant for the same assignment. A different assign
 
 **Can I choose Claude or Codex?**
 
-Yes. Name the provider, such as "consult Claude about this approach". The `consult` tool takes `provider` as `claude` or `codex`; omitting it chooses the counterpart. Same-provider consultation still uses a separate read-only session. Follow-ups retain the choice, and switching providers starts a fresh conversation. Model selection is a separate option.
+Yes. Name the provider, such as "consult Claude about this approach". The `consult_start` tool takes `provider` as `claude` or `codex`; omitting it chooses the counterpart. Same-provider consultation still uses a separate read-only session. Follow-ups retain the choice, and switching providers starts a fresh conversation. Model selection is a separate option.
 
 **Does my agent sit idle while the consultant works?**
 

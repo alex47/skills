@@ -86,7 +86,7 @@ function Start-Consultation($Id, $Arguments) {
     [void]$process.Start()
     $process.StandardInput.Close()
     $jobs[$job] = @{ Process = $process; Out = $process.StandardOutput.ReadToEndAsync(); Err = $process.StandardError.ReadToEndAsync() }
-    Reply $Id ("Job: $job`nThe consultant is working. Continue your own work, then call consult_wait with this job.") $false
+    Reply $Id ("Job: $job`nThe consultant is working. Continue your own work, then call consult_collect with this job.") $false
 }
 
 # Record finished jobs on disk, so a wait reads the same files however the job ended.
@@ -119,7 +119,7 @@ function Get-Page([string]$ReplyFile, [int]$Offset, [string]$Session) {
     $chunk = $text.Substring($Offset, $length)
     $Offset += $length
     $footer = 'End of reply.'
-    if ($Offset -lt $text.Length) { $footer = "More of the reply remains. Call consult_wait again with this job and offset $Offset." }
+    if ($Offset -lt $text.Length) { $footer = "More of the reply remains. Call consult_collect again with this job and offset $Offset." }
     return $chunk + "`n---`nSession: " + $Session + "`n" + $footer
 }
 
@@ -128,7 +128,7 @@ function Answer-Waits {
         $job = $wait.Job
         if (!(Test-Path -LiteralPath (Join-Path $job 'exit'))) {
             if ([DateTime]::UtcNow -lt $wait.Deadline) { continue }
-            Reply $wait.Id 'The consultant is still working. Call consult_wait again with this job.' $false
+            Reply $wait.Id 'The consultant is still working. Call consult_collect again with this job.' $false
         } elseif (Test-Path -LiteralPath (Join-Path $job 'cancelled')) {
             Reply $wait.Id 'consult: Consultation cancelled.' $true
         } elseif ([IO.File]::ReadAllText((Join-Path $job 'exit'), $utf8).Trim() -ne '0') {
@@ -151,7 +151,7 @@ function Stop-Consultation([string]$Job) {
 }
 
 $tools = @(
-    [ordered]@{ name = 'consult'; description = 'Start a turn with a separate read-only consultant. Returns a job immediately while the consultant works; collect the reply with consult_wait.'
+    [ordered]@{ name = 'consult_start'; description = 'Start a turn with a separate read-only consultant. Returns a job immediately while the consultant works; collect the reply with consult_collect.'
         annotations = @{ readOnlyHint = $true }
         inputSchema = [ordered]@{ type = 'object'; required = @('message'); properties = [ordered]@{
             message = @{ type = 'string'; description = 'Absolute path to a UTF-8 text file containing your message' }
@@ -159,15 +159,15 @@ $tools = @(
             session = @{ type = 'string'; description = 'Session path from the latest reply, to continue that conversation' }
             provider = @{ type = 'string'; enum = @('claude', 'codex'); description = 'Consultant provider for a new conversation; defaults to the other provider' }
             timeout = @{ type = 'integer'; description = 'Turn timeout in seconds; defaults to 600' } } } },
-    [ordered]@{ name = 'consult_wait'; description = 'Wait for a consultation job and return its reply, page by page, followed by the session path for follow-ups.'
+    [ordered]@{ name = 'consult_collect'; description = 'Collect the reply to a consultation job, waiting while the consultant works, page by page, followed by the session path for follow-ups.'
         annotations = @{ readOnlyHint = $true }
         inputSchema = [ordered]@{ type = 'object'; required = @('job'); properties = [ordered]@{
-            job = @{ type = 'string'; description = 'Job returned by consult' }
+            job = @{ type = 'string'; description = 'Job returned by consult_start' }
             offset = @{ type = 'integer'; description = 'Offset given by the previous page; omit for the first page' } } } },
     [ordered]@{ name = 'consult_cancel'; description = 'Stop a running consultation job. A cancelled turn ends its conversation.'
         annotations = [ordered]@{ readOnlyHint = $false; destructiveHint = $false; openWorldHint = $false }
         inputSchema = [ordered]@{ type = 'object'; required = @('job'); properties = [ordered]@{
-            job = @{ type = 'string'; description = 'Job returned by consult' } } } }
+            job = @{ type = 'string'; description = 'Job returned by consult_start' } } } }
 )
 
 function Handle([string]$Line) {
@@ -186,8 +186,8 @@ function Handle([string]$Line) {
             $arguments = $request.params.arguments
             if ($null -eq $arguments) { $arguments = New-Object PSObject }
             switch ([string]$request.params.name) {
-                'consult' { Start-Consultation $id $arguments }
-                'consult_wait' {
+                'consult_start' { Start-Consultation $id $arguments }
+                'consult_collect' {
                     $offset = 0
                     if (!(Valid-Job ([string]$arguments.job))) { Reply $id 'consult: Unknown job.' $true }
                     elseif ($null -ne $arguments.offset -and (![int]::TryParse([string]$arguments.offset, [ref]$offset) -or $offset -lt 0)) {
