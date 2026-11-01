@@ -67,7 +67,7 @@ You can use a single assessment or advice response, or continue with further que
 - Only the agent responsible for implementation changes your project.
 - The outcome distinguishes decisions from unresolved concerns and tells you what was actually inspected.
 - Missing authentication or a failed consultation is reported, rather than hidden by a substitute answer.
-- A failed consultation is reported without automatic repairs, retries or a new conversation.
+- After a failed consultation, the agent finishes its task without the consultant and does not retry.
 
 ## Where it fits
 

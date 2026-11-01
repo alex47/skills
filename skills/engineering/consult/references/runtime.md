@@ -27,4 +27,4 @@ A turn ends on its own once you have collected its reply; there is nothing to cl
 
 ## Failures
 
-When a tool reports an error, report it. Do not retry or start a new conversation without instructions.
+If a consultation fails before replying, report what happened, then finish your task without the consultant. Do not retry it.
