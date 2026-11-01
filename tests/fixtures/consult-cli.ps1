@@ -3,7 +3,13 @@ $ErrorActionPreference = 'Stop'
 $utf8 = New-Object Text.UTF8Encoding($false)
 [Console]::OutputEncoding = $utf8
 [Console]::InputEncoding = $utf8
-function Save($Name, $Value) { [IO.File]::WriteAllText((Join-Path $env:FAKE_CAPTURE $Name), [string]$Value, $utf8) }
+function Save($Name, $Value) {
+    # Parallel fixtures share the capture files, and Windows refuses a write while another is open.
+    for ($attempt = 1; ; $attempt++) {
+        try { [IO.File]::WriteAllText((Join-Path $env:FAKE_CAPTURE $Name), [string]$Value, $utf8); return }
+        catch [IO.IOException] { if ($attempt -ge 100) { throw }; Start-Sleep -Milliseconds 20 }
+    }
+}
 Save 'prompt.txt' ([Console]::In.ReadToEnd())
 Save 'cwd.txt' ([Environment]::CurrentDirectory)
 Save 'args.txt' ($args -join "`n")

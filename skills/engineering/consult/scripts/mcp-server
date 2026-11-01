@@ -32,7 +32,9 @@ emit() {
     rmdir "$state/lock"
 }
 json_text() {
-    local s
+    # Only ASCII characters are escaped, so work on bytes: substitutions in a multibyte
+    # locale are slow on long replies, prohibitively so in macOS's Bash 3.2.
+    local LC_ALL=C s
     s=$(cat; printf x); s=${s%x}
     s=${s//\\/\\\\}; s=${s//\"/\\\"}; s=${s//$'\n'/\\n}; s=${s//$'\r'/\\r}; s=${s//$'\t'/\\t}
     printf '%s' "$s" | LC_ALL=C tr -d '\000-\010\013\014\016-\037'
