@@ -153,11 +153,12 @@ printf '%s\n' "$cli" "${args[@]}" > "$turn/command.txt"
 # exec makes the monitored PID the CLI, while the subshell sets its working directory.
 (cd "$repo" && unset CLAUDECODE && export CONSULT_CONSULTANT=1 && exec "$cli" "${args[@]}") < "$turn/prompt.txt" > "$turn/stdout.txt" 2> "$turn/stderr.txt" &
 child=$!
+# Silenced so Bash's "Killed" notice is not printed when the timer is stopped mid-sleep.
 (
     sleep "$seconds"
     : > "$turn/timed-out"
     kill_tree "$child"
-) &
+) 2>/dev/null &
 timer=$!
 code=0
 wait "$child" || code=$?
