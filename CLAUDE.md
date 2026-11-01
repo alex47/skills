@@ -6,9 +6,9 @@ Skills are organized into bucket folders under `skills/`:
 - `in-progress/`: beta: public on purpose, feedback wanted, not shipped in the plugin
 - `deprecated/`: no longer used
 
-Every skill in `engineering/` or `productivity/` (the **promoted** buckets) must have a reference in the top-level `README.md` and an entry in `.claude-plugin/plugin.json`'s `skills` array (the Claude Code plugin ships exactly the promoted set). Skills in `misc/`, `in-progress/`, and `deprecated/` must not appear in either.
+Every skill in `engineering/` or `productivity/` (the **promoted** buckets) must have a reference in the top-level `README.md` and an entry in `.claude-plugin/plugin.json`'s `skills` array (the plugin ships exactly the promoted set). Codex reads `.codex-plugin/plugin.json` instead, so after editing the array run `node scripts/sync-plugin-version.mjs`, which copies it there; never edit the Codex copy by hand. Skills in `misc/`, `in-progress/`, and `deprecated/` must not appear in either.
 
-Install commands are copied verbatim from [.agents/install-block.md](./.agents/install-block.md). `.claude-plugin/marketplace.json` is the repo's own marketplace. Claude Code, Codex and Copilot install this fork from its `alex47` marketplace. Run `claude plugin validate . --strict` after touching either manifest. [ADR 0002](./.agents/adr/0002-ship-as-a-claude-code-plugin.md) records why.
+Install commands are copied verbatim from [.agents/install-block.md](./.agents/install-block.md). `.claude-plugin/marketplace.json` is the repo's own marketplace. Claude Code, Codex and Copilot install this fork from its `alex47` marketplace. Each plugin manifest declares the `consult` MCP server in its host's own form. Run `claude plugin validate . --strict` after touching any manifest. [ADR 0002](./.agents/adr/0002-ship-as-a-claude-code-plugin.md) records why.
 
 Each skill entry in the top-level `README.md` must link the skill name to its `SKILL.md`.
 

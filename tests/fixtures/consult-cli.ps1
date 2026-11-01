@@ -45,6 +45,7 @@ switch ($env:FAKE_CASE) {
 }
 $body = $env:FAKE_REPLY
 if (!$body) { $body = 'Independent finding' }
+if ($env:FAKE_REPLY_FILE) { $body = [IO.File]::ReadAllText($env:FAKE_REPLY_FILE, $utf8) }
 if ($env:FAKE_CASE -eq 'empty') { $body = '   ' }
 if ($env:FAKE_CASE -eq 'wrong-id') { $session = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa' }
 if ($provider -eq 'claude') { [Console]::Out.Write($body); exit 0 }

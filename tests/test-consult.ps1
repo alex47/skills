@@ -25,6 +25,12 @@ if ($Runner -eq 'Bash') {
     $prefix = @($script)
     & chmod +x $fixture
 }
+$serverShell = [Diagnostics.Process]::GetCurrentProcess().MainModule.FileName
+$serverPrefix = @('-NoProfile', '-NonInteractive', '-File', (Join-Path $root 'skills/engineering/consult/scripts/mcp-server.ps1'))
+if ($Runner -eq 'Bash') {
+    $serverShell = '/bin/bash'
+    $serverPrefix = @(Join-Path $root 'skills/engineering/consult/scripts/mcp-server')
+}
 $count = 0
 function Save($Path, [string]$Value) { [IO.File]::WriteAllText($Path, $Value, $utf8) }
 function Read($Path) { [IO.File]::ReadAllText($Path, $utf8) }
@@ -83,9 +89,89 @@ function Failure($Result) {
 function Case($Name, [scriptblock]$Body) {
     $env:FAKE_CASE = ''
     $env:FAKE_REPLY = 'Independent finding'
+    $env:FAKE_REPLY_FILE = ''
     & $Body
     $script:count++
     [Console]::Out.WriteLine('ok ' + $script:count + ' - ' + $Name)
+}
+
+# A minimal MCP client over the server's stdin and stdout.
+function Start-Server($Extra = @(), $ServerHost = 'codex') {
+    $start = New-Object Diagnostics.ProcessStartInfo
+    $start.FileName = $serverShell
+    $serverArgs = $serverPrefix + @('--host', $ServerHost, '--cli', $fixture, '--artifacts', $artifacts) + $Extra
+    $start.Arguments = (($serverArgs | ForEach-Object { Quote $_ }) -join ' ')
+    $start.WorkingDirectory = $temp
+    $start.UseShellExecute = $false
+    $start.RedirectStandardInput = $true
+    $start.RedirectStandardOutput = $true
+    $start.RedirectStandardError = $true
+    $start.StandardOutputEncoding = $utf8
+    $start.StandardErrorEncoding = $utf8
+    # Job directories go in the system temporary directory, so keep them inside the test's.
+    foreach ($name in @('TMPDIR', 'TEMP', 'TMP')) { $start.EnvironmentVariables[$name] = $temp }
+    $process = New-Object Diagnostics.Process
+    $process.StartInfo = $start
+    [void]$process.Start()
+    return @{ Process = $process; Pending = $process.StandardOutput.ReadLineAsync(); Err = $process.StandardError.ReadToEndAsync(); Next = 0; Responses = @{} }
+}
+function Request($Server, $Method, $Params) {
+    $Server.Next++
+    $id = $Server.Next
+    $json = ConvertTo-Json -Compress -Depth 10 -InputObject ([ordered]@{ jsonrpc = '2.0'; id = $id; method = $Method; params = $Params })
+    $bytes = $utf8.GetBytes($json + "`n")
+    $Server.Process.StandardInput.BaseStream.Write($bytes, 0, $bytes.Length)
+    $Server.Process.StandardInput.BaseStream.Flush()
+    $watch = [Diagnostics.Stopwatch]::StartNew()
+    while (!$Server.Responses.ContainsKey($id)) {
+        $left = 30000 - [int]$watch.Elapsed.TotalMilliseconds
+        if ($left -le 0 -or !$Server.Pending.Wait($left)) { throw "No response to $Method." }
+        $line = $Server.Pending.GetAwaiter().GetResult()
+        if ($null -eq $line) { throw "Server exited during ${Method}: " + $Server.Err.GetAwaiter().GetResult() }
+        $Server.Pending = $Server.Process.StandardOutput.ReadLineAsync()
+        $message = ConvertFrom-Json $line
+        $Server.Responses[[int]$message.id] = $message
+    }
+    $response = $Server.Responses[$id]
+    $Server.Responses.Remove($id)
+    return $response
+}
+function Tool($Server, $Name, $Arguments) {
+    $response = Request $Server 'tools/call' ([ordered]@{ name = $Name; arguments = $Arguments })
+    return @{ Text = [string]$response.result.content[0].text; IsError = [bool]$response.result.isError }
+}
+function Stop-Server($Server) {
+    $Server.Process.StandardInput.Close()
+    try {
+        if (!$Server.Process.WaitForExit(15000)) { $Server.Process.Kill(); throw 'Server did not exit after its host disconnected.' }
+    } finally { $Server.Process.Dispose() }
+}
+function Start-Consult($Server, $Arguments) {
+    $result = Tool $Server 'consult' $Arguments
+    Assert (!$result.IsError -and $result.Text -match '^Job: (.+)') ('consult did not return a job: ' + $result.Text)
+    return $Matches[1].TrimEnd("`r")
+}
+function Collect($Server, $Job) {
+    $reply = New-Object Text.StringBuilder
+    $offset = $null
+    for ($pages = 1; $pages -le 50; $pages++) {
+        $arguments = [ordered]@{ job = $Job }
+        if ($null -ne $offset) { $arguments.offset = $offset }
+        $result = Tool $Server 'consult_wait' $arguments
+        if ($result.IsError) { return @{ IsError = $true; Text = $result.Text } }
+        if ($result.Text.StartsWith('The consultant is still working.')) { $pages--; continue }
+        $footer = $result.Text.LastIndexOf("`n---`nSession: ")
+        Assert ($footer -ge 0) ('Page has no session footer: ' + $result.Text)
+        [void]$reply.Append($result.Text.Substring(0, $footer))
+        $tail = $result.Text.Substring($footer + 5).Split("`n")
+        $session = $tail[0].Substring(9)
+        if ($tail[1] -eq 'End of reply.') {
+            return @{ IsError = $false; Reply = $reply.ToString(); Session = $session; Pages = $pages; Fields = [IO.File]::ReadAllLines($session, $utf8) }
+        }
+        Assert ($tail[1] -match 'offset (\d+)\.$') ('Page footer has no offset: ' + $tail[1])
+        $offset = [int]$Matches[1]
+    }
+    throw 'Reply did not end.'
 }
 
 try {
@@ -277,6 +363,116 @@ try {
             Assert ((Read (Join-Path $capture 'cwd.txt')).Trim() -eq $repo) 'CLI was not launched at checkout root.'
         }
         Assert ((Read (Join-Path $repo 'original.txt')) -eq 'untouched') 'Project file changed.'
+    }
+    Case 'MCP server lists the consultation tools' {
+        $server = Start-Server
+        try {
+            $init = Request $server 'initialize' ([ordered]@{ protocolVersion = '2025-06-18'; capabilities = @{}; clientInfo = @{ name = 'test'; version = '0' } })
+            Assert ($init.result.protocolVersion -eq '2025-06-18') 'Server did not answer initialize.'
+            $tools = @((Request $server 'tools/list' @{}).result.tools)
+            Assert ((@($tools | ForEach-Object { $_.name }) -join ',') -eq 'consult,consult_wait,consult_cancel') 'Unexpected tools.'
+            Assert ($tools[0].annotations.readOnlyHint -and $tools[1].annotations.readOnlyHint) 'Consult and wait must be read-only.'
+            Assert (!$tools[2].annotations.destructiveHint -and !$tools[2].annotations.openWorldHint) 'Cancel must be non-destructive and closed-world.'
+        } finally { Stop-Server $server }
+    }
+    foreach ($serverHost in @('codex', 'claude')) {
+        Case "MCP from $serverHost starts at once, returns the reply and continues the conversation" {
+            $server = Start-Server @() $serverHost
+            try {
+                $job = Start-Consult $server ([ordered]@{ message = $message; repo = $repo })
+                $first = Collect $server $job
+                Assert (!$first.IsError) ('Consultation failed: ' + $first.Text)
+                Assert ($first.Reply -ceq 'Independent finding' -and $first.Pages -eq 1) 'Reply text changed.'
+                Assert ($first.Fields[1] -ne $serverHost -and $first.Fields[7] -eq $serverHost) 'Server did not consult the counterpart.'
+                Save $message 'Clarify the earlier finding.'
+                $second = Collect $server (Start-Consult $server ([ordered]@{ message = $message; session = $first.Session }))
+                Assert (!$second.IsError -and $second.Fields[2] -eq $first.Fields[2]) 'Follow-up changed conversation.'
+                Assert ((Read (Join-Path $capture 'prompt.txt')).Contains('Clarify the earlier finding.')) 'Follow-up message missing.'
+                $other = Collect $server (Start-Consult $server ([ordered]@{ message = $message; repo = $repo; provider = $serverHost }))
+                Assert ($other.Fields[1] -eq $serverHost) 'Explicit provider ignored.'
+            } finally {
+                Save $message 'Assess the same task independently.'
+                Stop-Server $server
+            }
+        }
+    }
+    Case 'MCP returns long replies in complete pages' {
+        $text = New-Object Text.StringBuilder
+        for ($line = 1; $line -le 1500; $line++) { [void]$text.Append("Line $line $([char]0x03bb)$([char]0x65e5) `"quoted`" \ end`n") }
+        [void]$text.Append(([string]([char]0x65e5) * 20000) + "`nlast line")
+        $replyFile = Join-Path $temp 'long-reply.txt'
+        Save $replyFile $text.ToString()
+        $env:FAKE_REPLY_FILE = $replyFile
+        $server = Start-Server
+        try {
+            $result = Collect $server (Start-Consult $server ([ordered]@{ message = $message; repo = $repo }))
+            Assert (!$result.IsError -and $result.Pages -gt 3) 'Long reply was not paged.'
+            Assert ($result.Reply -ceq $text.ToString()) 'Pages did not reassemble the exact reply.'
+        } finally { Stop-Server $server }
+    }
+    Case 'MCP reports a failed consultation' {
+        $env:FAKE_CASE = 'exit'
+        $server = Start-Server
+        try {
+            $result = Collect $server (Start-Consult $server ([ordered]@{ message = $message; repo = $repo }))
+            Assert ($result.IsError -and $result.Text.Contains('consult:') -and $result.Text.Contains('Diagnostics:')) 'Failure not reported.'
+        } finally { Stop-Server $server }
+    }
+    Case 'MCP wait returns while the consultant works, and cancel stops it' {
+        $env:FAKE_CASE = 'sleep'
+        $server = Start-Server @('--wait-limit', '1')
+        try {
+            $job = Start-Consult $server ([ordered]@{ message = $message; repo = $repo })
+            $running = Tool $server 'consult_wait' ([ordered]@{ job = $job })
+            Assert (!$running.IsError -and $running.Text.StartsWith('The consultant is still working.')) 'Wait did not return while running.'
+            $cancel = Tool $server 'consult_cancel' ([ordered]@{ job = $job })
+            Assert (!$cancel.IsError -and $cancel.Text -eq 'Consultation cancelled.') 'Cancel failed.'
+            $watch = [Diagnostics.Stopwatch]::StartNew()
+            do { $after = Tool $server 'consult_wait' ([ordered]@{ job = $job }) } while ($after.Text.StartsWith('The consultant is still working.') -and $watch.Elapsed.TotalSeconds -lt 15)
+            Assert ($after.IsError -and $after.Text.Contains('cancelled')) ('Cancelled job not reported: ' + $after.Text)
+            Assert ($watch.Elapsed.TotalSeconds -lt 15) 'Cancel did not stop the consultation promptly.'
+            Assert ((Tool $server 'consult_cancel' ([ordered]@{ job = $job })).Text -eq 'The consultation had already finished.') 'Second cancel misreported.'
+        } finally { Stop-Server $server }
+    }
+    Case 'MCP server stops its consultations when the host disconnects' {
+        $env:FAKE_CASE = 'sleep'
+        $started = Join-Path $capture 'id.txt'
+        if ($Runner -eq 'Bash') { $started = Join-Path $capture 'child.txt' }
+        Remove-Item -LiteralPath $started -ErrorAction SilentlyContinue
+        $server = Start-Server
+        $job = Start-Consult $server ([ordered]@{ message = $message; repo = $repo })
+        $watch = [Diagnostics.Stopwatch]::StartNew()
+        while (!(Test-Path -LiteralPath $started) -and $watch.Elapsed.TotalSeconds -lt 10) { Start-Sleep -Milliseconds 50 }
+        Stop-Server $server
+        Assert (Test-Path -LiteralPath (Join-Path $job 'cancelled')) 'Running consultation was not stopped.'
+        if ($Runner -eq 'Bash') {
+            $child = [int](Read (Join-Path $capture 'child.txt')).Trim()
+            $watch.Restart()
+            while ((Get-Process -Id $child -ErrorAction SilentlyContinue) -and $watch.Elapsed.TotalSeconds -lt 10) { Start-Sleep -Milliseconds 100 }
+            Assert (!(Get-Process -Id $child -ErrorAction SilentlyContinue)) 'Consultant process survived the disconnect.'
+        }
+    }
+    Case 'MCP rejects invalid calls and consultants' {
+        $server = Start-Server
+        try {
+            Assert (Tool $server 'consult_wait' ([ordered]@{ job = (Join-Path $temp 'missing') })).IsError 'Unknown job accepted.'
+            Assert (Tool $server 'consult' ([ordered]@{ message = $message })).IsError 'New conversation without repo accepted.'
+            Assert (Tool $server 'consult' ([ordered]@{ repo = $repo })).IsError 'Call without message accepted.'
+            Assert (Tool $server 'unknown' @{}).IsError 'Unknown tool accepted.'
+            if ($Runner -eq 'Bash') {
+                $escaped = Tool $server 'consult' ([ordered]@{ message = ($message + '"'); repo = $repo })
+                Assert ($escaped.IsError -and $escaped.Text.Contains('escaped')) 'Escaped argument was not refused.'
+            }
+        } finally { Stop-Server $server }
+        $env:CONSULT_CONSULTANT = '1'
+        $server = Start-Server
+        try {
+            $nested = Tool $server 'consult' ([ordered]@{ message = $message; repo = $repo })
+            Assert ($nested.IsError -and $nested.Text.Contains('Consultants must not invoke consult')) 'Consultant started a consultation.'
+        } finally {
+            Stop-Server $server
+            $env:CONSULT_CONSULTANT = ''
+        }
     }
     [Console]::Out.WriteLine("Passed $count $Runner scenarios.")
 } finally {

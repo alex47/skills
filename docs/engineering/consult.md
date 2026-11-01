@@ -18,11 +18,15 @@ Type `/consult`, or the agent reaches for it automatically when you request a Cl
 
 ## Prerequisites
 
-The selected provider's CLI must be installed and authenticated. The runner uses Bash on Linux, macOS and WSL, or Windows PowerShell 5.1+ on Windows. On Windows, use the native CLI executable. Authentication in the host application alone may not authenticate its CLI. A selective skill installation must include `consult` alongside any skill that calls it.
+Install the plugin (see the [README](../../README.md)): it provides the `consult` MCP server, which Claude Code and Codex start for you. The selected provider's CLI must be installed and authenticated. The server uses Bash on Linux, macOS and WSL, or Windows PowerShell 5.1+ on Windows. On Windows, use the native CLI executable. Authentication in the host application alone may not authenticate its CLI.
 
 The consultant needs relevant requirements, repository access and evidence. It does not inherit your agent's conversation or loaded skills, so your agent includes the relevant task instructions, constraints and decisions in its brief. Your agent provides test results and makes project changes. The CLI retains conversation metadata and diagnostics outside the project.
 
-The runner saves the consultant's reply in a plain-text file and prints its full path alongside the session path. It starts the CLI in the project's checkout root and uses that directory for follow-ups. Add `--session` with the session path to continue the conversation.
+## Start, keep working, collect
+
+The agent consults through three tools. `consult` starts a turn and returns a job at once, so the agent keeps working while the consultant thinks. `consult_wait` collects the reply, in pages when it is long, followed by a session path that continues the same conversation. `consult_cancel` stops a turn that is no longer needed.
+
+The consultation runs outside the host's sandbox, so the consultant's CLI can keep its conversation between turns, including what it read from your files. It starts the CLI in the project's checkout root and uses that directory for follow-ups. Closing the host session stops any consultation still running.
 
 ## A second opinion with continuity
 
@@ -34,7 +38,11 @@ Follow-ups reuse the same consultant for the same assignment. A different assign
 
 **Can I choose Claude or Codex?**
 
-Yes. Name the provider, such as "consult Claude about this approach". The runner accepts `--provider claude` or `--provider codex`; omitting it chooses the counterpart. Same-provider consultation still uses a separate read-only session. Follow-ups retain the choice, and switching providers starts a fresh conversation. Model selection is a separate option.
+Yes. Name the provider, such as "consult Claude about this approach". The `consult` tool takes `provider` as `claude` or `codex`; omitting it chooses the counterpart. Same-provider consultation still uses a separate read-only session. Follow-ups retain the choice, and switching providers starts a fresh conversation. Model selection is a separate option.
+
+**Does my agent sit idle while the consultant works?**
+
+No. The consultation runs in the background and the agent collects the reply when it is ready.
 
 **Can the consultant change my files?**
 

@@ -57,3 +57,7 @@ The version invariant above now applies to every managed route. `npm run version
 ## Update, 2026-10-31: fork installation
 
 This fork retains the `mattpocock-skills` plugin name and uses `alex47` as its marketplace identifier. Claude Code, Codex and Copilot add `alex47/skills` before installing from that marketplace. The official Claude marketplace continues to serve upstream. Documentation links within the fork are relative so they follow the branch being read.
+
+## Update, 2026-11-01
+
+The plugin now ships a `consult` MCP server, and Claude Code and Codex need different command forms for it (`${CLAUDE_PLUGIN_ROOT}` against a path relative to the plugin root). Codex therefore gets its own `.codex-plugin/plugin.json`, which it reads in place of `.claude-plugin/plugin.json`. `scripts/sync-plugin-version.mjs` copies the Claude manifest's `skills` array into it, so the list is edited in one place.

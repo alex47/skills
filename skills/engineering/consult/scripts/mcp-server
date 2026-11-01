@@ -1,0 +1,194 @@
+#!/usr/bin/env bash
+# Stdio MCP server that exposes consultations as start, wait and cancel tools.
+# Each consultation runs runner.sh as a background job outside the host's sandbox.
+# Linux, macOS and WSL. Bash 3.2 or newer.
+set -u
+umask 077
+
+script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)
+runner="$script_dir/runner.sh"
+page_bytes=16000
+host='' cli='' artifacts='' wait_limit=100
+while [ "$#" -gt 0 ]; do
+    [ "$#" -ge 2 ] || { printf 'consult: %s needs a value.\n' "$1" >&2; exit 1; }
+    case "$1" in
+        --host) host=$2;; --cli) cli=$2;; --artifacts) artifacts=$2;; --wait-limit) wait_limit=$2;;
+        *) printf 'consult: Unknown option: %s\n' "$1" >&2; exit 1;;
+    esac
+    shift 2
+done
+case "$host" in claude|codex) ;; *) printf 'consult: --host must be claude or codex.\n' >&2; exit 1;; esac
+case "$wait_limit" in ''|*[!0-9]*|0) printf 'consult: --wait-limit must be a positive integer.\n' >&2; exit 1;; esac
+
+jobs_root=$(cd "${TMPDIR:-/tmp}" && pwd -P)
+state=$(mktemp -d "$jobs_root/consult-mcp.XXXXXX") || exit 1
+started=()
+waiters=()
+
+# Responses from waiting subshells and the main loop share stdout, so writes take a lock.
+emit() {
+    until mkdir "$state/lock" 2>/dev/null; do sleep 0.05; done
+    printf '%s\n' "$1"
+    rmdir "$state/lock"
+}
+json_text() {
+    local s
+    s=$(cat; printf x); s=${s%x}
+    s=${s//\\/\\\\}; s=${s//\"/\\\"}; s=${s//$'\n'/\\n}; s=${s//$'\r'/\\r}; s=${s//$'\t'/\\t}
+    printf '%s' "$s" | LC_ALL=C tr -d '\000-\010\013\014\016-\037'
+}
+result() { emit '{"jsonrpc":"2.0","id":'"$1"',"result":'"$2"'}'; }
+reply() { result "$1" '{"content":[{"type":"text","text":"'"$(printf '%s' "$2" | json_text)"'"}],"isError":'"$3"'}'; }
+
+# Arguments are a flat object of plain strings and integers. Escaped strings are refused
+# rather than decoded, because hosts send paths, which never need escapes on these platforms.
+parse_arguments() {
+    local rest key value
+    unset arg_message arg_repo arg_session arg_provider arg_timeout arg_job arg_offset
+    [[ $1 =~ \"arguments\"[[:space:]]*:[[:space:]]*\{(.*)$ ]] || return 0
+    rest=${BASH_REMATCH[1]}
+    while :; do
+        [[ $rest =~ ^[[:space:]]*\}(.*)$ ]] && return 0
+        if [[ $rest =~ ^[[:space:]]*\"([a-z_]+)\"[[:space:]]*:[[:space:]]*\"([^\"\\]*)\"[[:space:]]*(,|\})(.*)$ ]] ||
+            [[ $rest =~ ^[[:space:]]*\"([a-z_]+)\"[[:space:]]*:[[:space:]]*([0-9]+)[[:space:]]*(,|\})(.*)$ ]]; then
+            key=${BASH_REMATCH[1]} value=${BASH_REMATCH[2]}
+            case "$key" in
+                message) arg_message=$value;; repo) arg_repo=$value;; session) arg_session=$value;;
+                provider) arg_provider=$value;; timeout) arg_timeout=$value;;
+                job) arg_job=$value;; offset) arg_offset=$value;;
+            esac
+            [ "${BASH_REMATCH[3]}" = '}' ] && return 0
+            rest=${BASH_REMATCH[4]}
+        else
+            return 1
+        fi
+    done
+}
+
+valid_job() { [[ $1 =~ ^/.+/consult-job\.[A-Za-z0-9]{6}$ && $(dirname "$1") = "$jobs_root" && -f $1/job ]]; }
+
+start_job() {
+    local id=$1 job args
+    if [ "${CONSULT_CONSULTANT:-}" = 1 ]; then reply "$id" 'consult: Consultants must not invoke consult.' true; return; fi
+    [ -n "${arg_message:-}" ] || { reply "$id" 'consult: message is required.' true; return; }
+    [ -n "${arg_repo:-}${arg_session:-}" ] || { reply "$id" 'consult: repo is required for a new conversation.' true; return; }
+    args=(--host "$host" --message "$arg_message")
+    [ -z "${arg_repo:-}" ] || args+=(--repo "$arg_repo")
+    [ -z "${arg_session:-}" ] || args+=(--session "$arg_session")
+    [ -z "${arg_provider:-}" ] || args+=(--provider "$arg_provider")
+    [ -z "${arg_timeout:-}" ] || args+=(--timeout "$arg_timeout")
+    [ -z "$cli" ] || args+=(--cli "$cli")
+    [ -n "${arg_session:-}" ] || [ -z "$artifacts" ] || args+=(--artifacts "$artifacts")
+    job=$(mktemp -d "$jobs_root/consult-job.XXXXXX") || { reply "$id" 'consult: Could not create a job.' true; return; }
+    : > "$job/job"
+    # The job never holds the MCP pipe; the runner's PID is kept so the job can be cancelled.
+    (
+        bash "$runner" "${args[@]}" > "$job/out.txt" 2> "$job/err.txt" < /dev/null &
+        printf '%s\n' "$!" > "$job/pid"
+        [ ! -f "$job/cancelled" ] || kill -TERM "$!" 2>/dev/null
+        code=0
+        wait "$!" || code=$?
+        printf '%s\n' "$code" > "$job/exit.tmp"
+        mv "$job/exit.tmp" "$job/exit"
+    ) < /dev/null > /dev/null 2>&1 &
+    started+=("$job")
+    reply "$id" "Job: $job
+The consultant is working. Continue your own work, then call consult_wait with this job." false
+}
+
+# One page of the reply, cut at a line break, or before an incomplete UTF-8 sequence.
+page() {
+    local reply_file=$1 offset=$2 session=$3 size chunk cut footer
+    # Byte offsets and byte patterns.
+    local LC_ALL=C
+    size=$(wc -c < "$reply_file" | tr -d ' ')
+    [ "$offset" -le "$size" ] || offset=$size
+    chunk=$(tail -c +"$((offset + 1))" "$reply_file" | head -c "$page_bytes"; printf x)
+    chunk=${chunk%x}
+    if [ "$((offset + ${#chunk}))" -lt "$size" ]; then
+        cut=${chunk%$'\n'*}
+        if [ "$cut" != "$chunk" ]; then
+            chunk="$cut"$'\n'
+        else
+            while [[ $chunk == *[$'\x80'-$'\xbf'] ]]; do chunk=${chunk%?}; done
+            [[ $chunk != *[$'\xc0'-$'\xff'] ]] || chunk=${chunk%?}
+        fi
+    fi
+    offset=$((offset + ${#chunk}))
+    if [ "$offset" -lt "$size" ]; then
+        footer="More of the reply remains. Call consult_wait again with this job and offset $offset."
+    else
+        footer='End of reply.'
+    fi
+    printf '%s\n---\nSession: %s\n%s' "$chunk" "$session" "$footer"
+}
+
+finish_wait() {
+    local id=$1 job=$2 offset=$3 deadline=$((SECONDS + wait_limit)) reply_file session
+    while [ ! -f "$job/exit" ]; do
+        if [ "$SECONDS" -ge "$deadline" ]; then
+            reply "$id" 'The consultant is still working. Call consult_wait again with this job.' false
+            return
+        fi
+        sleep 1
+    done
+    if [ -f "$job/cancelled" ]; then reply "$id" 'consult: Consultation cancelled.' true; return; fi
+    if [ "$(cat "$job/exit")" != 0 ]; then reply "$id" "$(cat "$job/err.txt")" true; return; fi
+    reply_file=$(sed -n 's/^Reply: //p' "$job/out.txt")
+    session=$(sed -n 's/^Session: //p' "$job/out.txt")
+    reply "$id" "$(page "$reply_file" "$offset" "$session")" false
+}
+
+stop_job() {
+    local job=$1
+    [ ! -f "$job/exit" ] || return 1
+    : > "$job/cancelled"
+    # The runner stops its CLI and releases the conversation when it receives TERM.
+    [ ! -f "$job/pid" ] || kill -TERM "$(cat "$job/pid")" 2>/dev/null || :
+}
+
+shutdown() {
+    local job pid
+    for job in ${started[@]+"${started[@]}"}; do stop_job "$job" || :; done
+    for pid in ${waiters[@]+"${waiters[@]}"}; do kill "$pid" 2>/dev/null || :; done
+    rm -rf "$state"
+}
+trap shutdown EXIT
+trap 'exit 143' TERM HUP
+trap 'exit 130' INT
+
+tools='[{"name":"consult","description":"Start a turn with a separate read-only consultant. Returns a job immediately while the consultant works; collect the reply with consult_wait.","annotations":{"readOnlyHint":true},"inputSchema":{"type":"object","properties":{"message":{"type":"string","description":"Absolute path to a UTF-8 text file containing your message"},"repo":{"type":"string","description":"Absolute path to the project; required for a new conversation"},"session":{"type":"string","description":"Session path from the latest reply, to continue that conversation"},"provider":{"type":"string","enum":["claude","codex"],"description":"Consultant provider for a new conversation; defaults to the other provider"},"timeout":{"type":"integer","description":"Turn timeout in seconds; defaults to 600"}},"required":["message"]}},{"name":"consult_wait","description":"Wait for a consultation job and return its reply, page by page, followed by the session path for follow-ups.","annotations":{"readOnlyHint":true},"inputSchema":{"type":"object","properties":{"job":{"type":"string","description":"Job returned by consult"},"offset":{"type":"integer","description":"Offset given by the previous page; omit for the first page"}},"required":["job"]}},{"name":"consult_cancel","description":"Stop a running consultation job. A cancelled turn ends its conversation.","annotations":{"readOnlyHint":false,"destructiveHint":false,"openWorldHint":false},"inputSchema":{"type":"object","properties":{"job":{"type":"string","description":"Job returned by consult"}},"required":["job"]}}]'
+
+while IFS= read -r line || [ -n "$line" ]; do
+    [[ $line =~ \"id\"[[:space:]]*:[[:space:]]*([0-9]+|\"[^\"\\]*\") ]] || continue
+    id=${BASH_REMATCH[1]}
+    [[ $line =~ \"method\"[[:space:]]*:[[:space:]]*\"([^\"]*)\" ]] || continue
+    case "${BASH_REMATCH[1]}" in
+        initialize)
+            version=2025-06-18
+            [[ ! $line =~ \"protocolVersion\"[[:space:]]*:[[:space:]]*\"([^\"\\]+)\" ]] || version=${BASH_REMATCH[1]}
+            result "$id" '{"protocolVersion":"'"$version"'","capabilities":{"tools":{}},"serverInfo":{"name":"consult","version":"1.0.0"}}';;
+        ping) result "$id" '{}';;
+        tools/list) result "$id" '{"tools":'"$tools"'}';;
+        tools/call)
+            if ! parse_arguments "$line"; then
+                reply "$id" 'consult: Arguments must be plain strings and integers; escaped characters are not supported.' true
+                continue
+            fi
+            if [[ $line =~ \"name\"[[:space:]]*:[[:space:]]*\"consult_wait\" ]]; then
+                if ! valid_job "${arg_job:-}"; then reply "$id" 'consult: Unknown job.' true; continue; fi
+                case "${arg_offset:-0}" in *[!0-9]*) reply "$id" 'consult: offset must be an integer.' true; continue;; esac
+                finish_wait "$id" "$arg_job" "${arg_offset:-0}" &
+                waiters+=("$!")
+            elif [[ $line =~ \"name\"[[:space:]]*:[[:space:]]*\"consult_cancel\" ]]; then
+                if ! valid_job "${arg_job:-}"; then reply "$id" 'consult: Unknown job.' true; continue; fi
+                if stop_job "$arg_job"; then reply "$id" 'Consultation cancelled.' false
+                else reply "$id" 'The consultation had already finished.' false; fi
+            elif [[ $line =~ \"name\"[[:space:]]*:[[:space:]]*\"consult\" ]]; then
+                start_job "$id"
+            else
+                reply "$id" 'consult: Unknown tool.' true
+            fi;;
+        *) emit '{"jsonrpc":"2.0","id":'"$id"',"error":{"code":-32601,"message":"Method not found"}}';;
+    esac
+done

@@ -47,5 +47,11 @@
     "./skills/productivity/to-questionnaire",
     "./skills/productivity/wait-what",
     "./skills/productivity/writing-for-agents"
-  ]
+  ],
+  "mcpServers": {
+    "consult": {
+      "command": "${CLAUDE_PLUGIN_ROOT}/skills/engineering/consult/scripts/mcp-server",
+      "args": ["--host", "claude"]
+    }
+  }
 }

@@ -6,7 +6,7 @@ One install story, one wording. `README.md`, `.changeset/*`, and every page unde
 
 Lead with installs that update themselves. Fall back to skills.sh, labelled "manual updates", only for agents that have no such install. Call a route managed only if it updates without the user running a command. Put any one-time opt-in beside its install command. Never promise "instant".
 
-Claude Code, Codex and Copilot install this fork from its own `alex47` marketplace, defined by `.claude-plugin/marketplace.json` and `plugin.json`. Those routes reinstall only when the `version` in `plugin.json` changes. The Release workflow runs `npm run version`, which copies that field from `package.json`, so users get a release when the "chore: version skills" PR merges.
+Claude Code, Codex and Copilot install this fork from its own `alex47` marketplace, defined by `.claude-plugin/marketplace.json` and `plugin.json`. Codex reads `.codex-plugin/plugin.json` in place of `.claude-plugin/plugin.json`. Those routes reinstall only when the `version` in the manifest changes. The Release workflow runs `npm run version`, which copies that field from `package.json` into both manifests, so users get a release when the "chore: version skills" PR merges.
 
 | Agent | Route | Updates itself? |
 | --- | --- | --- |

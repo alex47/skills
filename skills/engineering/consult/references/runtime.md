@@ -1,56 +1,30 @@
 # Runtime
 
-For long calls, run the command in the background so you can continue your own work while it runs. Run only one turn at a time per conversation.
+Consult through the plugin's MCP tools: `consult`, `consult_wait` and `consult_cancel`. Run only one turn at a time per conversation.
 
-## Linux, macOS and WSL
+## 1. Start a turn
 
-From the target project, run:
+Write your message as UTF-8 text to a new file outside the project: create it with `mktemp /tmp/consult-message.XXXXXX` on Linux, macOS and WSL, or `[IO.Path]::GetTempFileName()` on Windows. Then call `consult` with:
 
-```bash
-# Start a conversation
-bash "RUNNER" --message "MESSAGE"
+- `message`: absolute path to that file.
+- `repo`: absolute path to the project. Required for a new conversation.
+- `session`: the session path from the latest reply, to continue that conversation.
 
-# Continue a conversation
-bash "RUNNER" --message "MESSAGE" --session "SESSION"
-```
+`consult` returns a job immediately while the consultant works. Continue your own work in the meantime.
 
-- `RUNNER`: absolute path to `scripts/runner.sh` inside the `consult` skill directory.
-- `MESSAGE`: absolute path to the text file containing your message to the consultant. Create it with `mktemp /tmp/consult-message.XXXXXX` and write the message as UTF-8 text.
-- `SESSION`: absolute path to the session file for the conversation you want to continue.
+Optional: `provider` (`claude` or `codex`) chooses the consultant for a new conversation; by default, Claude consults Codex and Codex consults Claude. `timeout` sets the turn's limit in seconds, which defaults to 600.
 
-## Windows
+## 2. Collect the reply
 
-From the target project, run in PowerShell:
+Call `consult_wait` with the job. It returns the reply, followed by the session path for follow-ups:
 
-```powershell
-# Start a conversation
-& "RUNNER" --message "MESSAGE"
+- If it says the consultant is still working, call it again with the same job.
+- If it says more of the reply remains, call it again with the job and the offset it gives. Repeat until it reports the end of the reply.
 
-# Continue a conversation
-& "RUNNER" --message "MESSAGE" --session "SESSION"
-```
+## 3. Cancel
 
-- `RUNNER`: absolute path to `scripts/runner.ps1` inside the `consult` skill directory.
-- `MESSAGE`: absolute path to the text file containing your message to the consultant. Create it with `[IO.Path]::GetTempFileName()` and write the message as UTF-8 text.
-- `SESSION`: absolute path to the session file for the conversation you want to continue.
+Call `consult_cancel` with the job to stop a consultation you no longer need. A cancelled or failed turn ends its conversation.
 
-## Optional arguments
+## Failures
 
-- `--provider claude|codex`: choose the consultant’s provider. By default, Claude consults Codex and Codex consults Claude.
-- `--timeout SECONDS`: set the execution timeout, which defaults to 600 seconds per turn.
-
-## Results
-
-When a call finishes successfully, the runner prints two absolute paths to stdout:
-
-- **Reply:** absolute path to the plain-text file containing the consultant’s reply.
-- **Session:** absolute path to the session file. Pass this to `--session` to continue the same conversation.
-
-Example output:
-
-```text
-Reply: /tmp/consult.a1b2c3/turn.d4e5f6/reply.txt
-Session: /tmp/consult.a1b2c3/turn.d4e5f6/session.txt
-```
-
-On failure, report the error from stderr. Do not retry or start a new conversation without instructions.
+When a tool reports an error, report it. Do not retry or start a new conversation without instructions.

@@ -30,6 +30,7 @@ case "${FAKE_CASE:-}" in
         ;;
 esac
 body=${FAKE_REPLY:-Independent finding}
+if [ -n "${FAKE_REPLY_FILE:-}" ]; then body=$(cat "$FAKE_REPLY_FILE"; printf x); body=${body%x}; fi
 case "${FAKE_CASE:-}" in empty) body='   ';; wrong-id) session=aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa;; esac
 if [ "$provider" = claude ]; then printf '%s' "$body"; exit 0; fi
 case "${FAKE_CASE:-}" in
