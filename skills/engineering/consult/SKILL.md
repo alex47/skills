@@ -1,6 +1,6 @@
 ---
 name: consult
-description: Get an independent assessment or explore ideas and problems with a separate AI agent. Use when the user wants a second opinion or a thinking partner, another skill requests consultation, or an existing consultation needs follow-up.
+description: Get an independent assessment or explore ideas and problems with a separate AI agent. Use only when your instructions explicitly ask for a consultation, or to follow up an existing one.
 ---
 
 If you are acting as a consultant, do not use this skill.
