@@ -1,0 +1,4 @@
+# Bash refuses CRLF scripts, and Git for Windows converts text files to CRLF on checkout by default.
+*.sh text eol=lf
+skills/engineering/consult/scripts/mcp-server text eol=lf
+*.cmd text eol=crlf
